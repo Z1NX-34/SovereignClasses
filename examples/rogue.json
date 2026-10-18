@@ -1,0 +1,20 @@
+{
+  "name": "Rogue",
+  "description": "A quiet blade that wins fights before they start.",
+  "order": 1,
+  "tags": ["Melee", "Stealth"],
+  "attributes": [
+    { "attribute": "minecraft:generic.max_health", "amount": -4, "operation": "addition" },
+    { "attribute": "minecraft:generic.movement_speed", "amount": 0.1, "operation": "multiply_base" },
+    { "attribute": "minecraft:generic.attack_damage", "amount": 0.15, "operation": "multiply_base" }
+  ],
+  "kit": [
+    { "item": "minecraft:iron_sword", "count": 1 },
+    { "item": "minecraft:leather_chestplate", "count": 1 }
+  ],
+  "abilities": [
+    { "name": "Silent Step", "description": "Sneak at walking speed." },
+    { "name": "Backstab", "description": "Deal 150% damage from behind." }
+  ],
+  "commands": []
+}

@@ -1,0 +1,13 @@
+{
+  "name": "Gods",
+  "description": "Divine beings of curses and blessings.",
+  "order": 2,
+  "image": "",
+  "allowed_classes": [],
+  "attributes": [
+    { "attribute": "minecraft:generic.max_health", "amount": 10, "operation": "addition" }
+  ],
+  "kit": [],
+  "abilities": [],
+  "commands": []
+}
