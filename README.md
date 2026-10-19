@@ -19,22 +19,21 @@ config/sovereignclasses/
 * **Theme** tab: colours, hue/saturation/brightness of the textures, screen texts, and the behaviour switches.
   **Preview** shows it on your client only, **Save** stores it for everyone.
 
-Editor line formats:
-
-| Section | One entry per line | Example |
-|---|---|---|
-| Attributes | `attribute amount [operation]` | `generic.max_health 4` · `generic.attack_damage 15%` · `generic.movement_speed 0.1 multiply_total` |
-| Kit | `item [count] [nbt]` | `minecraft:iron_sword 1` (armour is equipped automatically) |
-| Abilities | `Name \| Description [\| type:key=value;key=value]` | `Silent Step \| Sneak at walking speed` |
-| Commands | command without `/`, `@s` = the player | `effect give @s minecraft:speed 30 1` |
-
-Operations: `addition` (default), `multiply_base`, `multiply_total`. A percentage like `15%` means `multiply_base` with 0.15.
-Abilities are display text for now; the optional `type`/`params` part is stored so scripted abilities can be added later without redoing your classes.
+Sections of a class or race:
+* **General** - description, plus tags and icon above. **Pick** opens a search list of every item or any in-game texture (item icons, GUI textures, your resource pack's art).
+* **Attributes** - **+ Add attribute** opens a search list of every attribute in the pack (vanilla and modded). Each row has an amount and a mode: *Flat*, *% of base* or *% of total*.
+* **Kit** - **+ Add item** opens a search list of every item. Count and optional NBT per row. Armour is equipped automatically.
+* **Abilities** - name and description rows shown under *Special abilities* (scripted abilities come later).
+* **Effects** - **+ Add effect** opens a search list of every potion effect. Level starts at 1; *Seconds 0* means permanent while the class or race is active (restored after death and relog).
+* **Commands** - advanced: one command per line, no leading slash, `@s` is the player. Runs once when picked.
+* **Classes** (races only) - tick which classes this race may use; nothing ticked = all.
 
 ## JSON format
-See `examples/`. A class has `name, description, order, tags, icon, attributes, kit, abilities, commands`.
+See `examples/`. A class has `name, description, order, tags, icon, attributes, kit, abilities, effects, commands`.
 A race has `name, description, order, image, allowed_classes, attributes, kit, abilities, commands`
 (`allowed_classes` empty = every class).
+`icon` is an item id (`minecraft:iron_sword`) or a texture path (`mypack:textures/gui/icons/knight.png`).
+Effects: `{ "effect": "minecraft:night_vision", "amplifier": 0, "seconds": 0 }` (amplifier 0 = level 1, seconds 0 = permanent).
 
 ## Commands (op level 2)
 * `/sovclasses editor` – open the editor

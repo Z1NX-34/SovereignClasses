@@ -3,6 +3,7 @@
   "description": "A quiet blade that wins fights before they start.",
   "order": 1,
   "tags": ["Melee", "Stealth"],
+  "icon": "minecraft:iron_sword",
   "attributes": [
     { "attribute": "minecraft:generic.max_health", "amount": -4, "operation": "addition" },
     { "attribute": "minecraft:generic.movement_speed", "amount": 0.1, "operation": "multiply_base" },
@@ -15,6 +16,9 @@
   "abilities": [
     { "name": "Silent Step", "description": "Sneak at walking speed." },
     { "name": "Backstab", "description": "Deal 150% damage from behind." }
+  ],
+  "effects": [
+    { "effect": "minecraft:night_vision", "amplifier": 0, "seconds": 0 }
   ],
   "commands": []
 }

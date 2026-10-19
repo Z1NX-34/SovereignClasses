@@ -133,6 +133,74 @@ public final class Skin {
         return t;
     }
 
+    // ---------- names ----------
+    private static ResourceLocation rl(String id) {
+        return ResourceLocation.tryParse(id == null ? "" : (id.contains(":") ? id.trim() : "minecraft:" + id.trim()));
+    }
+
+    public static String attrName(String id) {
+        ResourceLocation r = rl(id);
+        net.minecraft.world.entity.ai.attributes.Attribute a = r == null ? null : net.minecraftforge.registries.ForgeRegistries.ATTRIBUTES.getValue(r);
+        return a == null ? id : net.minecraft.network.chat.Component.translatable(a.getDescriptionId()).getString();
+    }
+
+    public static String effectName(String id) {
+        ResourceLocation r = rl(id);
+        net.minecraft.world.effect.MobEffect e = r == null ? null : net.minecraftforge.registries.ForgeRegistries.MOB_EFFECTS.getValue(r);
+        return e == null ? id : net.minecraft.network.chat.Component.translatable(e.getDescriptionId()).getString();
+    }
+
+    public static String itemName(String id) {
+        ResourceLocation r = rl(id);
+        net.minecraft.world.item.Item it = r == null ? null : net.minecraftforge.registries.ForgeRegistries.ITEMS.getValue(r);
+        return it == null ? id : new net.minecraft.world.item.ItemStack(it, 1).getHoverName().getString();
+    }
+
+    public static String roman(int n) {
+        String[] r = {"", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"};
+        return n >= 1 && n <= 10 ? r[n] : Integer.toString(n);
+    }
+
+    // ---------- icons ----------
+    private static final Map<ResourceLocation, int[]> DIMS = new HashMap<>();
+    private static final Map<String, net.minecraft.world.item.ItemStack> STACKS = new HashMap<>();
+
+    /** Draws any texture scaled into a size x size square (reads its real size once). */
+    public static void drawTexture(GuiGraphics g, ResourceLocation rl, int x, int y, int size) {
+        int[] d = DIMS.get(rl);
+        if (d == null) {
+            d = new int[] {16, 16};
+            try {
+                Optional<Resource> r = Minecraft.getInstance().getResourceManager().getResource(rl);
+                if (r.isPresent()) try (InputStream in = r.get().open(); NativeImage img = NativeImage.read(in)) {
+                    d = new int[] {img.getWidth(), img.getHeight()};
+                }
+            } catch (Exception ignored) {}
+            DIMS.put(rl, d);
+        }
+        RenderSystem.enableBlend();
+        RenderSystem.defaultBlendFunc();
+        g.blit(rl, x, y, size, size, 0, 0, d[0], d[1], d[0], d[1]);
+    }
+
+    public static boolean isTexturePath(String icon) { return icon != null && (icon.contains("textures/") || icon.endsWith(".png")); }
+
+    /** An icon is either an item id (minecraft:diamond_sword) or a texture path (namespace:textures/gui/x.png). 16x16. */
+    public static void drawIcon(GuiGraphics g, String icon, int x, int y) {
+        if (icon == null || icon.isBlank()) return;
+        if (isTexturePath(icon)) {
+            ResourceLocation rl = ResourceLocation.tryParse(icon.trim());
+            if (rl != null) drawTexture(g, rl, x, y, 16);
+            return;
+        }
+        net.minecraft.world.item.ItemStack st = STACKS.computeIfAbsent(icon, k -> {
+            ResourceLocation rl = ResourceLocation.tryParse(k.contains(":") ? k.trim() : "minecraft:" + k.trim());
+            net.minecraft.world.item.Item it = rl == null ? null : net.minecraftforge.registries.ForgeRegistries.ITEMS.getValue(rl);
+            return it == null ? net.minecraft.world.item.ItemStack.EMPTY : new net.minecraft.world.item.ItemStack(it, 1);
+        });
+        if (!st.isEmpty()) g.renderItem(st, x, y);
+    }
+
     // ---------- drawing ----------
     public static int blend(int a, int b, float t) {
         int r = (int) (((a >> 16) & 255) * (1 - t) + ((b >> 16) & 255) * t);

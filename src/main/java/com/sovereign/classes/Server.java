@@ -16,6 +16,8 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.effect.MobEffect;
+import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.ai.attributes.Attribute;
 import net.minecraft.world.entity.ai.attributes.AttributeInstance;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
@@ -89,12 +91,17 @@ public final class Server {
             PlayerState.setRace(sp, id);
             // a class that this race may not use is dropped
             Def c = Registry.classes.get(PlayerState.cls(sp));
-            if (c != null && !d.allowedClasses.isEmpty() && !d.allowedClasses.contains(c.id)) PlayerState.setCls(sp, "");
+            if (c != null && !d.allowedClasses.isEmpty() && !d.allowedClasses.contains(c.id)) {
+                removePermanent(sp, c);
+                PlayerState.setCls(sp, "");
+            }
         }
         boolean fresh = !id.equals(have);
+        if (fresh && !have.isEmpty()) removePermanent(sp, (isClass ? Registry.classes : Registry.races).get(have));
         applyAll(sp, fresh);
         if (fresh) {
             giveKit(sp, d);
+            giveTimedEffects(sp, d);
             runCommands(sp, d);
         }
         Net.sendSync(sp);
@@ -111,6 +118,8 @@ public final class Server {
         }
         add(sp, Registry.races.get(PlayerState.race(sp)), "race");
         add(sp, Registry.classes.get(PlayerState.cls(sp)), "class");
+        ensurePermanent(sp, Registry.races.get(PlayerState.race(sp)));
+        ensurePermanent(sp, Registry.classes.get(PlayerState.cls(sp)));
         if (heal) sp.setHealth(sp.getMaxHealth());
         else if (sp.getHealth() > sp.getMaxHealth()) sp.setHealth(sp.getMaxHealth());
     }
@@ -131,6 +140,43 @@ public final class Server {
             };
             UUID uuid = UUID.nameUUIDFromBytes((MOD_PREFIX + source + ":" + d.id + ":" + a.attribute + ":" + n).getBytes());
             inst.addTransientModifier(new AttributeModifier(uuid, MOD_PREFIX + source + ":" + d.id, a.amount, op));
+        }
+    }
+
+    // ---------- effects ----------
+    private static MobEffect effectOf(Def.Effect e) {
+        return ForgeRegistries.MOB_EFFECTS.getValue(new ResourceLocation(e.effect));
+    }
+
+    /** Effects with 0 seconds last as long as the class/race does; they are restored after death and relog. */
+    private static void ensurePermanent(ServerPlayer sp, Def d) {
+        if (d == null) return;
+        for (Def.Effect e : d.effects) {
+            if (e.seconds > 0) continue;
+            MobEffect me = effectOf(e);
+            if (me == null) continue;
+            MobEffectInstance cur = sp.getEffect(me);
+            if (cur == null || cur.getAmplifier() != e.amplifier || cur.getDuration() != MobEffectInstance.INFINITE_DURATION)
+                sp.addEffect(new MobEffectInstance(me, MobEffectInstance.INFINITE_DURATION, e.amplifier, false, false, true));
+        }
+    }
+
+    public static void removePermanent(ServerPlayer sp, Def d) {
+        if (d == null) return;
+        for (Def.Effect e : d.effects) {
+            if (e.seconds > 0) continue;
+            MobEffect me = effectOf(e);
+            if (me == null) continue;
+            MobEffectInstance cur = sp.getEffect(me);
+            if (cur != null && cur.getDuration() == MobEffectInstance.INFINITE_DURATION) sp.removeEffect(me);
+        }
+    }
+
+    private static void giveTimedEffects(ServerPlayer sp, Def d) {
+        for (Def.Effect e : d.effects) {
+            if (e.seconds <= 0) continue;
+            MobEffect me = effectOf(e);
+            if (me != null) sp.addEffect(new MobEffectInstance(me, e.seconds * 20, e.amplifier, false, true, true));
         }
     }
 
@@ -221,6 +267,8 @@ public final class Server {
                 .then(Commands.literal("reset").then(Commands.argument("players", EntityArgument.players()).executes(c -> {
                     int n = 0;
                     for (ServerPlayer p : EntityArgument.getPlayers(c, "players")) {
+                        removePermanent(p, Registry.races.get(PlayerState.race(p)));
+                        removePermanent(p, Registry.classes.get(PlayerState.cls(p)));
                         PlayerState.clear(p);
                         applyAll(p, false);
                         Net.sendSync(p);

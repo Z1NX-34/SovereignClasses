@@ -168,6 +168,14 @@ public class ClassScreen extends Screen {
             for (FormattedCharSequence s : f.split(Component.literal(a.name).withStyle(x -> x.withBold(true)), lw - 34)) { lines.add(s); cols.add(st.cHeading); }
             for (FormattedCharSequence s : f.split(FormattedText.of(a.description), lw - 34)) { lines.add(s); cols.add(st.cText); }
         }
+        if (!d.effects.isEmpty()) {
+            if (!lines.isEmpty()) { lines.add(FormattedCharSequence.EMPTY); cols.add(0); }
+            for (FormattedCharSequence s : f.split(Component.literal("Effects").withStyle(x -> x.withBold(true)), lw - 34)) { lines.add(s); cols.add(st.cHeading); }
+            for (Def.Effect e : d.effects) {
+                String t = Skin.effectName(e.effect) + " " + Skin.roman(e.amplifier + 1) + (e.seconds > 0 ? " (" + e.seconds + "s)" : "");
+                for (FormattedCharSequence s : f.split(FormattedText.of(t), lw - 34)) { lines.add(s); cols.add(st.cText); }
+            }
+        }
         if (lines.isEmpty()) { g.drawString(f, "-", lx + 14, py + 26, st.cDim, false); }
         int vis = Math.max(1, (ph - 32) / 10);
         passScroll = Math.max(0, Math.min(passScroll, lines.size() - vis));
@@ -180,6 +188,7 @@ public class ClassScreen extends Screen {
         Skin.panel(g, cx, top, cw, hh);
         int pcx = cx + cw / 2;
         g.drawCenteredString(f, Component.literal(d.displayName()).withStyle(s -> s.withBold(true)), pcx, top + 9, st.cHeading);
+        if (!d.icon.isBlank()) Skin.drawIcon(g, d.icon, Math.max(cx + 8, pcx - f.width(d.displayName()) / 2 - 24), top + 5);
         String tags = String.join("  ·  ", d.tags);
         if (!tags.isBlank()) g.drawCenteredString(f, Component.literal(f.plainSubstrByWidth(tags, cw - 20)), pcx, top + 20, st.cDim);
         g.fill(cx + 10, top + 29, cx + cw - 10, top + 30, Skin.alpha(st.cAccent, 0x88));

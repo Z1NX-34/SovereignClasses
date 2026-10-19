@@ -1,13 +1,16 @@
 package com.sovereign.classes.client;
 
-import com.google.gson.JsonParser;
 import com.sovereign.classes.Net;
 import com.sovereign.classes.data.Def;
 import com.sovereign.classes.data.Registry;
 import com.sovereign.classes.data.Settings;
 import com.sovereign.classes.data.Text;
+import com.google.gson.JsonObject;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.function.Consumer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
@@ -20,12 +23,14 @@ import net.minecraftforge.registries.ForgeRegistries;
 
 /**
  * In-game editor for classes, races and the theme (ops only; the server checks again when saving).
- * Everything is saved to config/sovereignclasses/ and synced to all players at once.
+ * Everything is written to config/sovereignclasses/ and synced to all players at once.
+ * Every field is bound to the draft as you type, so switching tabs or pickers never loses text.
  */
 public class EditorScreen extends Screen {
     private enum Tab { CLASSES, RACES, THEME }
 
-    private static final String[] SEC = {"General", "Attributes", "Kit", "Abilities", "Commands"};
+    private static final String[] SEC_C = {"General", "Attributes", "Kit", "Abilities", "Effects", "Commands"};
+    private static final String[] SEC_R = {"General", "Attributes", "Kit", "Abilities", "Effects", "Commands", "Classes"};
     private static final String[] SEC_THEME = {"Colours", "Texts & options"};
     private static final String[][] COLOURS = {
             {"accent", "Accent"}, {"accentDark", "Accent dark"}, {"heading", "Headings"}, {"text", "Text"}, {"dim", "Dim text"},
@@ -34,16 +39,35 @@ public class EditorScreen extends Screen {
     private static final String[][] TEXTS = {
             {"titleClass", "Class screen title"}, {"subtitleClass", "Class screen subtitle"}, {"confirmClass", "Class confirm button"},
             {"titleRace", "Race screen title"}, {"subtitleRace", "Race screen subtitle"}, {"confirmRace", "Race confirm button"}};
-    private static final String[] HINTS = {
-            "Description shown on the screen.",
-            "One per line:  attribute amount [operation]   e.g.  generic.max_health 4   |   generic.attack_damage 15%   |   generic.movement_speed 0.1 multiply_total",
-            "One per line:  item [count] [nbt]   e.g.  minecraft:iron_sword 1   (armour is equipped automatically)",
-            "One per line:  Name | Description      (optional third part  | type:key=value;key=value  for scripted abilities)",
-            "One per line, no leading slash, run once when picked.  @s is the player.   e.g.  effect give @s minecraft:speed 30 1"};
+
+    private static String hint(String sec) {
+        return switch (sec) {
+            case "General" -> "Description shown on the screen.";
+            case "Attributes" -> "What this changes. Flat adds a number; % of base / % of total change by a percentage.";
+            case "Kit" -> "Items given when picked. Armour is equipped for you. NBT is optional (enchantments etc.).";
+            case "Abilities" -> "Text under Special abilities. Scripted abilities come later.";
+            case "Effects" -> "Potion effects. Level starts at 1. Seconds 0 = permanent while this is active.";
+            case "Commands" -> "Advanced: one command per line, no leading slash, @s = the player. Runs once when picked.";
+            default -> "Click to allow or block classes for this race. None ticked = every class is allowed.";
+        };
+    }
+
+    // ---------- draft ----------
+    private static final class AttrRow { String attr; String amount = "1"; String op = "addition"; AttrRow(String a) { attr = a; } }
+    private static final class KitRow { String item; String count = "1"; String nbt = ""; KitRow(String i) { item = i; } }
+    private static final class AbRow { String name = "", desc = "", type = ""; JsonObject params = new JsonObject(); }
+    private static final class EffRow { String effect; String level = "1"; String seconds = "0"; EffRow(String e) { effect = e; } }
 
     private static final class Draft {
-        String id = "", name = "", a = "", b = "", order = "0", desc = "", attrs = "", kit = "", abilities = "", commands = "";
+        String id = "", name = "", a = "", b = "", order = "0", desc = "", commands = "";
+        List<AttrRow> attrs = new ArrayList<>();
+        List<KitRow> kit = new ArrayList<>();
+        List<AbRow> abilities = new ArrayList<>();
+        List<EffRow> effects = new ArrayList<>();
+        Set<String> allowed = new LinkedHashSet<>();
     }
+
+    private record Lbl(int x, int y, String text, int color, String icon) {}
 
     private final Screen parent;
     private Tab tab = Tab.CLASSES;
@@ -51,17 +75,16 @@ public class EditorScreen extends Screen {
     private Draft draft;
     private String selectedId = "";
     private boolean isNew;
-    private int listScroll, seenVersion;
+    private int listScroll, rowScroll, seenVersion;
     private String status = "";
     private int statusColor;
     private String pendingSelect = "";
+    private Settings ts;
 
-    private EditBox fId, fName, fA, fB, fOrder;
-    private MultiLineEditBox big;
-    private final List<EditBox> themeBoxes = new ArrayList<>();
-    private Settings ts;   // theme/settings being edited
-
-    private int pad = 12, bodyTop, bodyBottom, listW, fx, fw;
+    private final List<Lbl> labels = new ArrayList<>();
+    private int rowsY0, rowsVis, rowsTotal;
+    private int pad = 14, bodyTop, bodyBottom, listW, fx, fw;
+    private static final int ROW = 22;
 
     public EditorScreen(Screen parent) {
         super(Component.literal("Sovereign Classes Editor"));
@@ -71,18 +94,31 @@ public class EditorScreen extends Screen {
     }
 
     private Def.Kind kind() { return tab == Tab.RACES ? Def.Kind.RACE : Def.Kind.CLASS; }
+    private String[] secs() { return tab == Tab.RACES ? SEC_R : SEC_C; }
+    private String secName() { return secs()[Math.min(section, secs().length - 1)]; }
 
     // ---------- draft <-> def ----------
     private Draft toDraft(Def d) {
         Draft x = new Draft();
         x.id = d.id; x.name = d.name; x.order = Integer.toString(d.order); x.desc = d.description;
-        if (d.kind == Def.Kind.CLASS) { x.a = Text.listToText(d.tags, ", "); x.b = d.icon; }
-        else { x.a = d.image; x.b = Text.listToText(d.allowedClasses, ", "); }
-        x.attrs = Text.attrsToText(d.attributes);
-        x.kit = Text.kitToText(d.kit);
-        x.abilities = Text.abilitiesToText(d.abilities);
+        if (d.kind == Def.Kind.CLASS) { x.a = Text.listToText(d.tags, ", "); x.b = d.icon; } else { x.a = d.image; }
+        for (Def.Attr a : d.attributes) {
+            AttrRow r = new AttrRow(a.attribute);
+            r.op = a.operation;
+            r.amount = Text.fmt("addition".equals(a.operation) ? a.amount : Math.round(a.amount * 10000.0) / 100.0);
+            x.attrs.add(r);
+        }
+        for (Def.Kit k : d.kit) { KitRow r = new KitRow(k.item); r.count = Integer.toString(k.count); r.nbt = k.nbt; x.kit.add(r); }
+        for (Def.Ability a : d.abilities) { AbRow r = new AbRow(); r.name = a.name; r.desc = a.description; r.type = a.type; r.params = a.params; x.abilities.add(r); }
+        for (Def.Effect e : d.effects) { EffRow r = new EffRow(e.effect); r.level = Integer.toString(e.amplifier + 1); r.seconds = Integer.toString(e.seconds); x.effects.add(r); }
         x.commands = String.join("\n", d.commands);
+        x.allowed.addAll(d.allowedClasses);
         return x;
+    }
+
+    private static double num(String s, String what) {
+        try { return Double.parseDouble(s.trim().replace(',', '.')); }
+        catch (NumberFormatException e) { throw new IllegalArgumentException(what + ": '" + s + "' is not a number"); }
     }
 
     private Def toDef(Draft x, Def.Kind k) {
@@ -92,45 +128,40 @@ public class EditorScreen extends Screen {
         d.name = x.name.trim();
         d.description = x.desc;
         try { d.order = Integer.parseInt(x.order.trim()); } catch (NumberFormatException e) { throw new IllegalArgumentException("Order must be a whole number"); }
-        if (k == Def.Kind.CLASS) { d.tags = Text.parseList(x.a, ","); d.icon = x.b.trim(); }
-        else { d.image = x.a.trim(); d.allowedClasses = Text.parseList(x.b, ","); }
-        d.attributes = Text.parseAttrs(x.attrs);
-        for (Def.Attr a : d.attributes)
-            if (!ForgeRegistries.ATTRIBUTES.containsKey(new ResourceLocation(a.attribute)))
-                throw new IllegalArgumentException("Unknown attribute: " + a.attribute);
-        d.kit = Text.parseKit(x.kit);
-        for (Def.Kit it : d.kit)
-            if (!ForgeRegistries.ITEMS.containsKey(new ResourceLocation(it.item)))
-                throw new IllegalArgumentException("Unknown item: " + it.item);
-        d.abilities = Text.parseAbilities(x.abilities);
+        if (k == Def.Kind.CLASS) { d.tags = Text.parseList(x.a, ","); d.icon = x.b.trim(); } else { d.image = x.a.trim(); }
+        for (AttrRow r : x.attrs) {
+            Def.Attr a = new Def.Attr();
+            a.attribute = r.attr; a.operation = r.op;
+            a.amount = num(r.amount, Skin.attrName(r.attr));
+            if (!"addition".equals(r.op)) a.amount /= 100.0;
+            d.attributes.add(a);
+        }
+        for (KitRow r : x.kit) {
+            Def.Kit t = new Def.Kit();
+            t.item = r.item; t.nbt = r.nbt.trim();
+            t.count = Math.max(1, (int) num(r.count, Skin.itemName(r.item)));
+            d.kit.add(t);
+        }
+        for (AbRow r : x.abilities) {
+            if (r.name.isBlank() && r.desc.isBlank()) continue;
+            Def.Ability a = new Def.Ability();
+            a.name = r.name.trim(); a.description = r.desc.trim(); a.type = r.type; a.params = r.params;
+            d.abilities.add(a);
+        }
+        for (EffRow r : x.effects) {
+            Def.Effect e = new Def.Effect();
+            e.effect = r.effect;
+            e.amplifier = Math.max(0, (int) num(r.level, Skin.effectName(r.effect)) - 1);
+            e.seconds = Math.max(0, (int) num(r.seconds, Skin.effectName(r.effect)));
+            d.effects.add(e);
+        }
         d.commands = Text.parseLines(x.commands);
+        if (k == Def.Kind.RACE) for (String c : Registry.classes.keySet()) if (x.allowed.contains(c)) d.allowedClasses.add(c);
+        if (k == Def.Kind.RACE) for (String c : x.allowed) if (!d.allowedClasses.contains(c) && Registry.classes.containsKey(c)) d.allowedClasses.add(c);
         return d;
     }
 
-    // ---------- widgets ----------
-    private void commit() {
-        if (tab == Tab.THEME) {
-            for (EditBox b : themeBoxes) setTheme((String) keyOf(b), b.getValue());
-            return;
-        }
-        if (draft == null) return;
-        if (fId != null) draft.id = fId.getValue();
-        if (fName != null) draft.name = fName.getValue();
-        if (fA != null) draft.a = fA.getValue();
-        if (fB != null) draft.b = fB.getValue();
-        if (fOrder != null) draft.order = fOrder.getValue();
-        if (big != null) switch (section) {
-            case 0 -> draft.desc = big.getValue();
-            case 1 -> draft.attrs = big.getValue();
-            case 2 -> draft.kit = big.getValue();
-            case 3 -> draft.abilities = big.getValue();
-            default -> draft.commands = big.getValue();
-        }
-    }
-
-    private final java.util.Map<EditBox, String> keys = new java.util.HashMap<>();
-    private Object keyOf(EditBox b) { return keys.get(b); }
-
+    // ---------- theme access ----------
     private String getTheme(String k) {
         return switch (k) {
             case "accent" -> ts.accent; case "accentDark" -> ts.accentDark; case "heading" -> ts.heading; case "text" -> ts.text;
@@ -159,15 +190,26 @@ public class EditorScreen extends Screen {
         } catch (NumberFormatException ignored) {}
     }
 
-    private void restart() { commit(); rebuildWidgets(); }
+    // ---------- widget helpers ----------
+    private EditBox box(int x, int y, int w, String value, int max, Consumer<String> setter) {
+        EditBox b = new EditBox(Minecraft.getInstance().font, x, y, w, 18, Component.literal(""));
+        b.setMaxLength(max);
+        b.setValue(value);
+        b.setResponder(setter);
+        addRenderableWidget(b);
+        return b;
+    }
 
+    private void pick(String title, List<PickerScreen.Source> src, Consumer<String> onPick) {
+        Minecraft.getInstance().setScreen(new PickerScreen(this, title, src, onPick));
+    }
+
+    // ---------- build ----------
     @Override
     protected void init() {
         Font f = Minecraft.getInstance().font;
-        keys.clear();
-        themeBoxes.clear();
-        fId = fName = fA = fB = fOrder = null;
-        big = null;
+        labels.clear();
+        rowsVis = rowsTotal = 0;
         pad = Skin.pad(width, height) > 16 ? 16 : 12;
         bodyTop = pad + 38;
         bodyBottom = height - pad - 26;
@@ -175,33 +217,31 @@ public class EditorScreen extends Screen {
         fx = pad + listW + 8;
         fw = width - fx - pad;
 
-        // tabs
         String[] names = {"Classes", "Races", "Theme"};
         for (int i = 0; i < 3; i++) {
             final int ti = i;
             addRenderableWidget(new SkinButton(pad + i * 84, pad + 14, 80, 18, Component.literal(names[i]), b -> {
-                commit(); tab = Tab.values()[ti]; section = 0; draft = null; selectedId = ""; isNew = false; listScroll = 0; status = ""; rebuildWidgets();
+                tab = Tab.values()[ti]; section = 0; rowScroll = 0; draft = null; selectedId = ""; isNew = false; listScroll = 0; status = "";
+                rebuildWidgets();
             }).highlight(tab.ordinal() == i));
         }
 
-        // bottom buttons
         int by = height - pad - 20, bw = 86;
         addRenderableWidget(new SkinButton(width - pad - bw, by, bw, 20, Component.literal("Close"), b -> onClose()));
         if (tab == Tab.THEME) {
             addRenderableWidget(new SkinButton(width - pad - 2 * bw - 6, by, bw, 20, Component.literal("Save"), b -> saveTheme()));
             addRenderableWidget(new SkinButton(width - pad - 3 * bw - 12, by, bw, 20, Component.literal("Preview"), b -> preview()));
-            initTheme(f);
+            initTheme();
             return;
         }
         addRenderableWidget(new SkinButton(width - pad - 2 * bw - 6, by, bw, 20, Component.literal("Save"), b -> save()));
         addRenderableWidget(new SkinButton(width - pad - 3 * bw - 12, by, bw, 20, Component.literal("Delete"), b -> delete()));
 
-        // list
         addRenderableWidget(new SkinButton(pad, bodyTop + 4, listW, 18, Component.literal("+ New " + (tab == Tab.RACES ? "race" : "class")), b -> {
-            commit();
             Draft d = new Draft();
             d.order = Integer.toString(Registry.of(kind()).size() + 1);
-            draft = d; selectedId = ""; isNew = true; section = 0; status = "New entry - fill it in and press Save"; statusColor = Skin.s().cDim;
+            draft = d; selectedId = ""; isNew = true; section = 0; rowScroll = 0;
+            status = "New entry - fill it in and press Save"; statusColor = Skin.s().cDim;
             rebuildWidgets();
         }));
         List<Def> defs = new ArrayList<>(Registry.of(kind()).values());
@@ -209,63 +249,196 @@ public class EditorScreen extends Screen {
         listScroll = Math.max(0, Math.min(listScroll, Math.max(0, defs.size() - rows)));
         for (int i = 0; i < rows && i + listScroll < defs.size(); i++) {
             Def d = defs.get(i + listScroll);
-            String label = f.plainSubstrByWidth(d.displayName(), listW - 10);
-            addRenderableWidget(new SkinButton(pad, ly + i * 18, listW, 16, Component.literal(label), b -> {
-                commit(); draft = toDraft(d); selectedId = d.id; isNew = false; section = 0; status = ""; rebuildWidgets();
+            addRenderableWidget(new SkinButton(pad, ly + i * 18, listW, 16, Component.literal(d.displayName()), b -> {
+                draft = toDraft(d); selectedId = d.id; isNew = false; section = 0; rowScroll = 0; status = ""; rebuildWidgets();
             }).highlight(d.id.equals(selectedId) && !isNew));
         }
         if (draft == null) return;
+        final Draft dr = draft;
 
-        // form
+        // fixed fields
         boolean cls = tab == Tab.CLASSES;
         int y1 = bodyTop + 10;
-        fId = box(f, fx, y1, 100, draft.id, 40);
-        fId.setEditable(isNew);
-        fName = box(f, fx + 106, y1, fw - 106 - 56, draft.name, 80);
-        fOrder = box(f, fx + fw - 50, y1, 50, draft.order, 6);
+        EditBox idBox = box(fx, y1, 100, dr.id, 40, v -> dr.id = v);
+        idBox.setEditable(isNew);
+        box(fx + 106, y1, fw - 106 - 56, dr.name, 80, v -> dr.name = v);
+        box(fx + fw - 50, y1, 50, dr.order, 6, v -> dr.order = v);
         int y2 = y1 + 32, half = (fw - 6) / 2;
-        fA = box(f, fx, y2, half, draft.a, 400);
-        fB = box(f, fx + half + 6, y2, fw - half - 6, draft.b, 400);
-        int sy = y2 + 24, n = SEC.length, sw = (fw - (n - 1) * 4) / n;
+        if (cls) {
+            box(fx, y2, half, dr.a, 400, v -> dr.a = v);
+            box(fx + half + 6, y2, fw - half - 6 - 46, dr.b, 400, v -> dr.b = v);
+            addRenderableWidget(new SkinButton(fx + fw - 44, y2, 44, 18, Component.literal("Pick"), b ->
+                    pick("Pick an icon", List.of(PickerScreen.items(), PickerScreen.textures()), id -> dr.b = id)));
+        } else {
+            box(fx, y2, fw - 46, dr.a, 400, v -> dr.a = v);
+            addRenderableWidget(new SkinButton(fx + fw - 44, y2, 44, 18, Component.literal("Pick"), b ->
+                    pick("Pick a picture", List.of(PickerScreen.textures()), id -> dr.a = id)));
+        }
+
+        // sections
+        String[] sn = secs();
+        int sy = y2 + 24, n = sn.length, sw = (fw - (n - 1) * 4) / n;
         for (int i = 0; i < n; i++) {
             final int si = i;
-            addRenderableWidget(new SkinButton(fx + i * (sw + 4), sy, sw, 16, Component.literal(SEC[i]), b -> { section = si; restart(); }).highlight(section == i));
+            addRenderableWidget(new SkinButton(fx + i * (sw + 4), sy, sw, 16, Component.literal(sn[i]), b -> { section = si; rowScroll = 0; rebuildWidgets(); }).highlight(section == i));
         }
-        int by0 = sy + 20 + 22;
-        int bh = Math.max(40, bodyBottom - 14 - by0);
-        big = new MultiLineEditBox(f, fx, by0, fw, bh, Component.literal(""), Component.literal(""));
-        big.setValue(switch (section) {
-            case 0 -> draft.desc; case 1 -> draft.attrs; case 2 -> draft.kit; case 3 -> draft.abilities; default -> draft.commands;
-        });
+        int ay0 = sy + 20 + 22, ay1 = bodyBottom - 14;
+        String sec = secName();
+        switch (sec) {
+            case "General" -> bigBox(f, ay0, ay1, dr.desc, v -> dr.desc = v);
+            case "Commands" -> bigBox(f, ay0, ay1, dr.commands, v -> dr.commands = v);
+            case "Attributes" -> attributeRows(f, dr, ay0, ay1);
+            case "Kit" -> kitRows(f, dr, ay0, ay1);
+            case "Abilities" -> abilityRows(f, dr, ay0, ay1);
+            case "Effects" -> effectRows(f, dr, ay0, ay1);
+            default -> classRows(dr, ay0, ay1);
+        }
+    }
+
+    private void bigBox(Font f, int y0, int y1, String value, Consumer<String> setter) {
+        MultiLineEditBox big = new MultiLineEditBox(f, fx, y0, fw, Math.max(40, y1 - y0), Component.literal(""), Component.literal(""));
+        big.setValue(value);
+        big.setValueListener(setter);
         addRenderableWidget(big);
     }
 
-    private EditBox box(Font f, int x, int y, int w, String value, int max) {
-        EditBox b = new EditBox(f, x, y, w, 18, Component.literal(""));
-        b.setMaxLength(max);
-        b.setValue(value);
-        addRenderableWidget(b);
-        return b;
+    /** Common part of the row sections: Add button, scrolling window. Returns the first row y. */
+    private int rowsHead(String addText, Runnable onAdd, int ay0, int ay1, int total) {
+        addRenderableWidget(new SkinButton(fx, ay0 - 2, 130, 16, Component.literal(addText), b -> onAdd.run()));
+        rowsY0 = ay0 + 18;
+        rowsVis = Math.max(1, (ay1 - rowsY0) / ROW);
+        rowsTotal = total;
+        rowScroll = Math.max(0, Math.min(rowScroll, Math.max(0, total - rowsVis)));
+        return rowsY0;
     }
 
-    private void initTheme(Font f) {
+    private SkinButton removeBtn(int x, int y, Runnable r) {
+        return addRenderableWidget(new SkinButton(x, y, 18, 18, Component.literal("X"), b -> { r.run(); rebuildWidgets(); }));
+    }
+
+    private void attributeRows(Font f, Draft dr, int ay0, int ay1) {
+        int y0 = rowsHead("+ Add attribute", () -> pick("Add attribute", List.of(PickerScreen.attributes()), id -> {
+            dr.attrs.add(new AttrRow(id));
+            rowScroll = Integer.MAX_VALUE;
+        }), ay0, ay1, dr.attrs.size());
+        int xr = fx + fw - 12, opW = 70, amtW = 54;
+        int amtX = xr - 22 - 4 - opW - 4 - amtW;
+        labels.add(new Lbl(amtX, ay0 + 2, "Amount", Skin.s().cDim, null));
+        for (int i = 0; i < rowsVis && i + rowScroll < dr.attrs.size(); i++) {
+            AttrRow r = dr.attrs.get(i + rowScroll);
+            int y = y0 + i * ROW;
+            labels.add(new Lbl(fx + 4, y + 5, f.plainSubstrByWidth(Skin.attrName(r.attr), amtX - fx - 12), Skin.s().cText, null));
+            box(amtX, y, amtW, r.amount, 10, v -> r.amount = v);
+            addRenderableWidget(new SkinButton(amtX + amtW + 4, y, opW, 18,
+                    Component.literal(switch (r.op) { case "multiply_base" -> "% of base"; case "multiply_total" -> "% of total"; default -> "Flat"; }), b -> {
+                r.op = switch (r.op) { case "addition" -> "multiply_base"; case "multiply_base" -> "multiply_total"; default -> "addition"; };
+                rebuildWidgets();
+            }));
+            final int idx = i + rowScroll;
+            removeBtn(xr - 18, y, () -> dr.attrs.remove(idx));
+        }
+    }
+
+    private void kitRows(Font f, Draft dr, int ay0, int ay1) {
+        int y0 = rowsHead("+ Add item", () -> pick("Add item", List.of(PickerScreen.items()), id -> {
+            dr.kit.add(new KitRow(id));
+            rowScroll = Integer.MAX_VALUE;
+        }), ay0, ay1, dr.kit.size());
+        int xr = fx + fw - 12, nbtW = Math.max(60, fw / 4), cntW = 34;
+        int nbtX = xr - 22 - nbtW, cntX = nbtX - 4 - cntW;
+        labels.add(new Lbl(cntX, ay0 + 2, "Count", Skin.s().cDim, null));
+        labels.add(new Lbl(nbtX, ay0 + 2, "NBT (optional)", Skin.s().cDim, null));
+        for (int i = 0; i < rowsVis && i + rowScroll < dr.kit.size(); i++) {
+            KitRow r = dr.kit.get(i + rowScroll);
+            int y = y0 + i * ROW;
+            labels.add(new Lbl(fx + 4, y + 1, "", 0, r.item));
+            labels.add(new Lbl(fx + 24, y + 5, f.plainSubstrByWidth(Skin.itemName(r.item), cntX - fx - 32), Skin.s().cText, null));
+            box(cntX, y, cntW, r.count, 3, v -> r.count = v);
+            box(nbtX, y, nbtW, r.nbt, 2000, v -> r.nbt = v);
+            final int idx = i + rowScroll;
+            removeBtn(xr - 18, y, () -> dr.kit.remove(idx));
+        }
+    }
+
+    private void abilityRows(Font f, Draft dr, int ay0, int ay1) {
+        int y0 = rowsHead("+ Add ability", () -> {
+            dr.abilities.add(new AbRow());
+            rowScroll = Integer.MAX_VALUE;
+            rebuildWidgets();
+        }, ay0, ay1, dr.abilities.size());
+        int xr = fx + fw - 12, nameW = Math.max(80, fw * 3 / 10);
+        int descX = fx + nameW + 4, descW = xr - 22 - descX;
+        labels.add(new Lbl(fx + 2, ay0 + 2, "Name", Skin.s().cDim, null));
+        labels.add(new Lbl(descX, ay0 + 2, "Description", Skin.s().cDim, null));
+        for (int i = 0; i < rowsVis && i + rowScroll < dr.abilities.size(); i++) {
+            AbRow r = dr.abilities.get(i + rowScroll);
+            int y = y0 + i * ROW;
+            box(fx, y, nameW, r.name, 60, v -> r.name = v);
+            box(descX, y, descW, r.desc, 400, v -> r.desc = v);
+            final int idx = i + rowScroll;
+            removeBtn(xr - 18, y, () -> dr.abilities.remove(idx));
+        }
+    }
+
+    private void effectRows(Font f, Draft dr, int ay0, int ay1) {
+        int y0 = rowsHead("+ Add effect", () -> pick("Add effect", List.of(PickerScreen.effects()), id -> {
+            dr.effects.add(new EffRow(id));
+            rowScroll = Integer.MAX_VALUE;
+        }), ay0, ay1, dr.effects.size());
+        int xr = fx + fw - 12, secW = 54, lvlW = 40;
+        int secX = xr - 22 - secW, lvlX = secX - 4 - lvlW;
+        labels.add(new Lbl(lvlX, ay0 + 2, "Level", Skin.s().cDim, null));
+        labels.add(new Lbl(secX, ay0 + 2, "Seconds", Skin.s().cDim, null));
+        for (int i = 0; i < rowsVis && i + rowScroll < dr.effects.size(); i++) {
+            EffRow r = dr.effects.get(i + rowScroll);
+            int y = y0 + i * ROW;
+            labels.add(new Lbl(fx + 4, y + 5, f.plainSubstrByWidth(Skin.effectName(r.effect), lvlX - fx - 12), Skin.s().cText, null));
+            box(lvlX, y, lvlW, r.level, 3, v -> r.level = v);
+            box(secX, y, secW, r.seconds, 6, v -> r.seconds = v);
+            final int idx = i + rowScroll;
+            removeBtn(xr - 18, y, () -> dr.effects.remove(idx));
+        }
+    }
+
+    private void classRows(Draft dr, int ay0, int ay1) {
+        List<String> ids = new ArrayList<>(Registry.classes.keySet());
+        int cols = 2, gap = 6, cw = (fw - 12 - gap) / cols;
+        rowsY0 = ay0 + 2;
+        int vis = Math.max(1, (ay1 - rowsY0) / ROW);
+        rowsVis = vis;
+        rowsTotal = (ids.size() + cols - 1) / cols;
+        rowScroll = Math.max(0, Math.min(rowScroll, Math.max(0, rowsTotal - vis)));
+        if (ids.isEmpty()) labels.add(new Lbl(fx + 4, rowsY0 + 4, "No classes exist yet.", Skin.s().cDim, null));
+        for (int r = 0; r < vis && r + rowScroll < rowsTotal; r++) {
+            for (int c = 0; c < cols; c++) {
+                int i = (r + rowScroll) * cols + c;
+                if (i >= ids.size()) break;
+                String id = ids.get(i);
+                Def d = Registry.classes.get(id);
+                boolean on = dr.allowed.contains(id);
+                addRenderableWidget(new SkinButton(fx + c * (cw + gap), rowsY0 + r * ROW, cw, 18,
+                        Component.literal((on ? "[x] " : "[ ] ") + d.displayName()), b -> {
+                    if (!dr.allowed.remove(id)) dr.allowed.add(id);
+                    rebuildWidgets();
+                }).highlight(on));
+            }
+        }
+    }
+
+    private void initTheme() {
         String[][] fields = section == 0 ? COLOURS : TEXTS;
-        int n = SEC_THEME.length, sw = 120;
-        for (int i = 0; i < n; i++) {
+        int sw = 120;
+        for (int i = 0; i < SEC_THEME.length; i++) {
             final int si = i;
-            addRenderableWidget(new SkinButton(pad + i * (sw + 4), bodyTop + 4, sw, 16, Component.literal(SEC_THEME[i]), b -> { section = si; restart(); }).highlight(section == i));
+            addRenderableWidget(new SkinButton(pad + i * (sw + 4), bodyTop + 4, sw, 16, Component.literal(SEC_THEME[i]), b -> { section = si; rebuildWidgets(); }).highlight(section == i));
         }
         int cols = section == 0 ? 3 : 2;
         int gap = 10, cw = (width - 2 * pad - (cols - 1) * gap) / cols;
         int y0 = bodyTop + 38;
         for (int i = 0; i < fields.length; i++) {
             int c = i % cols, r = i / cols;
-            EditBox b = new EditBox(f, pad + c * (cw + gap), y0 + r * 30, cw, 18, Component.literal(""));
-            b.setMaxLength(120);
-            b.setValue(getTheme(fields[i][0]));
-            addRenderableWidget(b);
-            themeBoxes.add(b);
-            keys.put(b, fields[i][0]);
+            final String key = fields[i][0];
+            box(pad + c * (cw + gap), y0 + r * 30, cw, getTheme(key), 120, v -> setTheme(key, v));
         }
         if (section == 1) {
             int ty = y0 + ((fields.length + 1) / 2) * 30 + 4;
@@ -276,7 +449,6 @@ public class EditorScreen extends Screen {
                 final int ti = i;
                 addRenderableWidget(new SkinButton(pad + i * (tw + 6), ty, tw, 18,
                         Component.literal(lab[i] + ": " + (val[i] ? "ON" : "OFF")), b -> {
-                    commit();
                     switch (ti) {
                         case 0 -> ts.requireRace = !ts.requireRace;
                         case 1 -> ts.requireClass = !ts.requireClass;
@@ -291,7 +463,6 @@ public class EditorScreen extends Screen {
 
     // ---------- actions ----------
     private void save() {
-        commit();
         if (draft == null) { status = "Nothing to save"; statusColor = Skin.s().cNeg; return; }
         try {
             Def d = toDef(draft, kind());
@@ -313,16 +484,14 @@ public class EditorScreen extends Screen {
     }
 
     private void preview() {
-        commit();
         ts.compile();
         Registry.settings = ts;
+        ts = Settings.fromJson(ts.toJson());
         status = "Previewing (not saved yet)";
         statusColor = Skin.s().cDim;
-        ts = Settings.fromJson(ts.toJson());
     }
 
     private void saveTheme() {
-        commit();
         ts.compile();
         Net.CH.sendToServer(new Net.SaveSettings(ts.toJson().toString()));
         status = "Saved";
@@ -360,9 +529,8 @@ public class EditorScreen extends Screen {
             int cols = section == 0 ? 3 : 2, gap = 10, cw = (width - 2 * pad - (cols - 1) * gap) / cols, y0 = bodyTop + 38;
             for (int i = 0; i < fields.length; i++)
                 g.drawString(f, fields[i][1], pad + (i % cols) * (cw + gap), y0 + (i / cols) * 30 - 10, st.cDim, false);
-            if (section == 0) {
+            if (section == 0)
                 g.drawString(f, "Colours are hex like #E8B028. Hue shift recolours the whole texture set; set the accent colours to match.", pad, bodyBottom - 12, st.cDim, false);
-            }
         } else {
             Skin.panel(g, fx - 6, bodyTop, fw + 12, bodyBottom - bodyTop);
             if (draft == null) {
@@ -373,23 +541,37 @@ public class EditorScreen extends Screen {
                 g.drawString(f, "Display name", fx + 106, y1 - 9, st.cDim, false);
                 g.drawString(f, "Order", fx + fw - 50, y1 - 9, st.cDim, false);
                 int y2 = y1 + 32, half = (fw - 6) / 2;
-                boolean cls = tab == Tab.CLASSES;
-                g.drawString(f, cls ? "Tags (comma separated)" : "Image (optional resource path)", fx, y2 - 9, st.cDim, false);
-                g.drawString(f, cls ? "Icon item (optional)" : "Allowed classes (comma separated, empty = all)", fx + half + 6, y2 - 9, st.cDim, false);
+                if (tab == Tab.CLASSES) {
+                    g.drawString(f, "Tags (comma separated)", fx, y2 - 9, st.cDim, false);
+                    g.drawString(f, "Icon (item or texture) - Pick", fx + half + 6, y2 - 9, st.cDim, false);
+                } else {
+                    g.drawString(f, "Picture (texture path, optional) - Pick", fx, y2 - 9, st.cDim, false);
+                }
                 int hy = y2 + 24 + 20;
-                var lines = f.split(Component.literal(HINTS[section]), fw);
+                var lines = f.split(Component.literal(hint(secName())), fw);
                 for (int i = 0; i < Math.min(2, lines.size()); i++) g.drawString(f, lines.get(i), fx, hy + i * 9, st.cDim, false);
             }
         }
+        for (Lbl l : labels) {
+            if (l.icon() != null) Skin.drawIcon(g, l.icon(), l.x(), l.y());
+            else g.drawString(f, l.text(), l.x(), l.y(), l.color(), false);
+        }
+        if (rowsTotal > 0 && tab != Tab.THEME && draft != null)
+            Skin.scrollBar(g, fx + fw - 6, rowsY0, rowsVis * ROW, rowsVis, rowsTotal, rowScroll);
         if (!status.isEmpty()) g.drawString(f, f.plainSubstrByWidth(status, width - 2 * pad - 280), pad, height - pad - 14, statusColor, false);
         super.render(g, mx, my, pt);
     }
 
     @Override
     public boolean mouseScrolled(double mx, double my, double delta) {
-        if (tab != Tab.THEME && mx < pad + listW + 4 && my > bodyTop + 22) {
-            commit();
-            listScroll = Math.max(0, listScroll - (int) Math.signum(delta));
+        int d = -(int) Math.signum(delta);
+        if (tab != Tab.THEME && mx < fx - 8 && my > bodyTop + 22) {
+            listScroll = Math.max(0, listScroll + d);
+            rebuildWidgets();
+            return true;
+        }
+        if (tab != Tab.THEME && draft != null && rowsTotal > 0 && mx >= fx && my >= rowsY0) {
+            rowScroll = Math.max(0, Math.min(rowScroll + d, Math.max(0, rowsTotal - rowsVis)));
             rebuildWidgets();
             return true;
         }

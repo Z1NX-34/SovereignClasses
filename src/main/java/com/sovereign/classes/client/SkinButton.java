@@ -21,6 +21,7 @@ public class SkinButton extends Button {
         Skin.button(g, getX(), getY(), getWidth(), getHeight(), over, active);
         var f = Minecraft.getInstance().font;
         int col = !active ? Skin.s().cDim : over ? Skin.s().cHeading : Skin.s().cText;
-        g.drawCenteredString(f, getMessage(), getX() + getWidth() / 2, getY() + (getHeight() - 8) / 2, col);
+        String t = f.plainSubstrByWidth(getMessage().getString(), getWidth() - 8);
+        g.drawCenteredString(f, Component.literal(t), getX() + getWidth() / 2, getY() + (getHeight() - 8) / 2, col);
     }
 }

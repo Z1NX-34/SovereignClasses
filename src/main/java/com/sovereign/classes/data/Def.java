@@ -35,6 +35,14 @@ public final class Def {
         public JsonObject params = new JsonObject();
     }
 
+    public static final class Effect {
+        public String effect = "";
+        /** 0-based amplifier (level 1 = 0). */
+        public int amplifier;
+        /** 0 = permanent while the class/race is active. */
+        public int seconds;
+    }
+
     public Kind kind;
     public String id = "";
     public String name = "";
@@ -47,6 +55,7 @@ public final class Def {
     public List<Kit> kit = new ArrayList<>();
     public List<String> commands = new ArrayList<>();
     public List<Ability> abilities = new ArrayList<>();
+    public List<Effect> effects = new ArrayList<>();
     public List<String> allowedClasses = new ArrayList<>();
 
     public Def(Kind kind, String id) { this.kind = kind; this.id = id; }
@@ -107,6 +116,16 @@ public final class Def {
             if (j.has("params") && j.get("params").isJsonObject()) b.params = j.getAsJsonObject("params");
             d.abilities.add(b);
         }
+        JsonElement ef = o.get("effects");
+        if (ef != null && ef.isJsonArray()) for (JsonElement x : ef.getAsJsonArray()) {
+            if (!x.isJsonObject()) continue;
+            JsonObject j = x.getAsJsonObject();
+            Effect e = new Effect();
+            e.effect = str(j, "effect", "");
+            try { e.amplifier = Math.max(0, j.get("amplifier").getAsInt()); } catch (Exception ignored) {}
+            try { e.seconds = Math.max(0, j.get("seconds").getAsInt()); } catch (Exception ignored) {}
+            if (!e.effect.isBlank()) d.effects.add(e);
+        }
         return d;
     }
 
@@ -157,6 +176,15 @@ public final class Def {
             ab.add(j);
         }
         o.add("abilities", ab);
+        JsonArray ef = new JsonArray();
+        for (Effect e : effects) {
+            JsonObject j = new JsonObject();
+            j.addProperty("effect", e.effect);
+            j.addProperty("amplifier", e.amplifier);
+            j.addProperty("seconds", e.seconds);
+            ef.add(j);
+        }
+        o.add("effects", ef);
         JsonArray cm = new JsonArray();
         for (String s : commands) cm.add(s);
         o.add("commands", cm);
