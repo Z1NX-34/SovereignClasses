@@ -176,12 +176,29 @@ public class ClassScreen extends Screen {
                 for (FormattedCharSequence s : f.split(FormattedText.of(t), lw - 34)) { lines.add(s); cols.add(st.cText); }
             }
         }
+        List<String> wl = new ArrayList<>();
+        for (Def.WeaponRow w : d.weapons) {
+            var t = Registry.weapons.types.stream().filter(x -> x.id.equals(w.type)).findFirst().orElse(null);
+            wl.add((t == null ? w.type : t.label()) + ": " + pct(w.percent));
+        }
+        if (d.weaponOther != 0) wl.add("Other weapons: " + pct(d.weaponOther));
+        for (Def.Rule r : d.rules) if (r.percent != 0)
+            wl.add(("dealt".equals(r.when) ? "Deals " : "Takes ") + pct(r.percent) + " - " + PickerScreen.filterLabel(r.filter));
+        if (!wl.isEmpty()) {
+            if (!lines.isEmpty()) { lines.add(FormattedCharSequence.EMPTY); cols.add(0); }
+            for (FormattedCharSequence s : f.split(Component.literal("Weapons & damage").withStyle(x -> x.withBold(true)), lw - 34)) { lines.add(s); cols.add(st.cHeading); }
+            for (String t : wl) for (FormattedCharSequence s : f.split(FormattedText.of(t), lw - 34)) { lines.add(s); cols.add(st.cText); }
+        }
         if (lines.isEmpty()) { g.drawString(f, "-", lx + 14, py + 26, st.cDim, false); }
         int vis = Math.max(1, (ph - 32) / 10);
         passScroll = Math.max(0, Math.min(passScroll, lines.size() - vis));
         for (int i = 0; i < vis && i + passScroll < lines.size(); i++)
             g.drawString(f, lines.get(i + passScroll), lx + 14, py + 26 + i * 10, cols.get(i + passScroll), false);
         Skin.scrollBar(g, lx + lw - 13, py + 24, vis * 10, vis, lines.size(), passScroll);
+    }
+
+    private static String pct(double p) {
+        return (p > 0 ? "+" : "") + com.sovereign.classes.data.Text.fmt(p) + "%";
     }
 
     private void centre(GuiGraphics g, Font f, Settings st, Def d, int mx, int my) {

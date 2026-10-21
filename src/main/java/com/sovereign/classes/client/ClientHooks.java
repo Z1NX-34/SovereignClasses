@@ -12,13 +12,13 @@ import net.minecraft.client.Minecraft;
 public final class ClientHooks {
     private ClientHooks() {}
 
-    public static void sync(String settings, List<String> classes, List<String> races, String race, String cls) {
+    public static void sync(String settings, String weapons, List<String> classes, List<String> races, String race, String cls) {
         try {
             Settings s = Registry.settingsFromWire(settings);
             List<Def> c = new ArrayList<>(), r = new ArrayList<>();
             for (String j : classes) c.add(Registry.fromWire(Def.Kind.CLASS, j));
             for (String j : races) r.add(Registry.fromWire(Def.Kind.RACE, j));
-            Registry.install(s, c, r);
+            Registry.install(s, Registry.weaponsFromWire(weapons), c, r);
         } catch (Exception e) {
             System.err.println("[sovereignclasses] bad sync packet: " + e);
         }

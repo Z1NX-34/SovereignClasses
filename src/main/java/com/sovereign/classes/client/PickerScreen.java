@@ -69,6 +69,69 @@ public class PickerScreen extends Screen {
                 i -> new ItemStack(i, 1).getHoverName().getString(), i -> new ItemStack(i, 1)));
     }
 
+    public static Source entities() {
+        return new Source("Entities", () -> fromRegistry(ForgeRegistries.ENTITY_TYPES,
+                e -> e.getDescription().getString(), null));
+    }
+
+    public static Source weaponTypes() {
+        return new Source("Weapon types", () -> {
+            List<Entry> out = new ArrayList<>();
+            for (com.sovereign.classes.data.Weapons.Type t : Registry.weapons.types) out.add(new Entry(t.id, t.label(), null, null));
+            return out;
+        });
+    }
+
+    public static Source classesSource() {
+        return new Source("Classes", () -> {
+            List<Entry> out = new ArrayList<>();
+            for (com.sovereign.classes.data.Def d : Registry.classes.values()) out.add(new Entry(d.id, d.displayName(), null, null));
+            return out;
+        });
+    }
+
+    private static final String[][] PRESETS = {
+            {"all", "Everything"}, {"melee", "Melee hits"}, {"projectile", "Projectiles (arrows, thrown)"},
+            {"explosion", "Explosions"}, {"aoe", "Area damage (explosions, breath, lightning)"}, {"magic", "All magic and spells"},
+            {"fire", "Fire"}, {"fall", "Falling"},
+            {"spell:fire", "Fire spells"}, {"spell:ice", "Ice spells"}, {"spell:lightning", "Lightning spells"},
+            {"spell:holy", "Holy spells"}, {"spell:ender", "Ender spells"}, {"spell:blood", "Blood spells"},
+            {"spell:evocation", "Evocation spells"}, {"spell:nature", "Nature spells"}, {"spell:eldritch", "Eldritch spells"},
+            {"vs:undead", "Against undead"}, {"vs:boss", "Against bosses"}, {"vs:player", "Against players"}};
+
+    /** Readable text for a rule filter. */
+    public static String filterLabel(String f) {
+        for (String[] p : PRESETS) if (p[0].equals(f)) return p[1];
+        if (f.startsWith("vs:")) {
+            com.sovereign.classes.data.Weapons.Type g = Registry.weapons.group(f.substring(3));
+            return "Against " + (g == null ? f.substring(3) : g.label());
+        }
+        if (f.startsWith("type:")) return "Damage type " + f.substring(5);
+        return f;
+    }
+
+    public static Source filters() {
+        return new Source("Damage kinds", () -> {
+            List<Entry> out = new ArrayList<>();
+            for (String[] p : PRESETS) out.add(new Entry(p[0], p[1], null, null));
+            for (com.sovereign.classes.data.Weapons.Type g : Registry.weapons.groups)
+                out.add(new Entry("vs:" + g.id, "Against " + g.label(), null, null));
+            return out;
+        });
+    }
+
+    public static Source damageTypes() {
+        return new Source("Damage types", () -> {
+            List<Entry> out = new ArrayList<>();
+            var level = Minecraft.getInstance().level;
+            if (level != null)
+                for (ResourceLocation k : level.registryAccess().registryOrThrow(net.minecraft.core.registries.Registries.DAMAGE_TYPE).keySet())
+                    out.add(new Entry("type:" + k, k.toString(), null, null));
+            out.sort(Comparator.comparing((Entry e) -> e.id));
+            return out;
+        });
+    }
+
     public static Source textures() {
         return new Source("Textures", () -> {
             List<Entry> out = new ArrayList<>();

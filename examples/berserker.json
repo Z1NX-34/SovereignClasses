@@ -1,0 +1,15 @@
+{
+  "name": "Berserker",
+  "description": "A reckless axe fighter. The lower his health, the harder he hits.",
+  "order": 10,
+  "tags": ["melee"],
+  "icon": "minecraft:iron_axe",
+  "attributes": [],
+  "kit": [],
+  "abilities": [{"name": "Bloodlust", "description": "Hits harder the more hurt he is."}],
+  "effects": [],
+  "commands": [],
+  "weapon_other": -60,
+  "weapons": [{"type": "axe", "percent": 0}, {"type": "greataxe", "percent": 0}],
+  "rules": [{"when": "taken", "filter": "all", "percent": 20}]
+}

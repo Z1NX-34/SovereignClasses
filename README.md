@@ -52,3 +52,16 @@ Hue shift recolours the textures; set the accent colours to match.
 
 ## Build
 Push to GitHub; the Actions workflow builds the jar (artifact `sovereignclasses-jar`).
+
+## Weapons, damage rules and locks (v3)
+
+`config/sovereignclasses/weapons.json` (editable in the editor's **Weapons** tab) holds:
+- **types** - which items are a dagger, katana, axe ... Matchers: `minecraft:iron_sword`, `#minecraft:swords`, `*katana*` (any id containing the word), `@empty` (bare hands). First matching type wins, so specific types go first.
+- **groups** - mob groups for rules like "Against demons". `undead`, `boss`, `player` are built in.
+- **locks** - items only the listed classes may attack with, use or mine with. Creative players ignore locks.
+
+Classes and races get, in the editor's **Weapons** and **Rules** sections (or in JSON):
+- `weapon_other` and `weapons[{type, percent}]` - damage change per weapon type: `0` full, `-60` = 60 % less, `+20` = 20 % more.
+- `rules[{when: dealt|taken, filter, percent}]`. Filters: `all, melee, projectile, explosion, aoe, magic, fire, fall`, `spell:fire|ice|lightning|holy|ender|blood|evocation|nature|eldritch` (Iron's Spells), `type:<damage type id>`, `vs:<group>`.
+
+Percents of the same kind add up (+75 and -30 = +45); a total below -100 stops at zero damage. Race and class both count. Weapon damage uses the item in the main hand, so it also covers bows and staffs.

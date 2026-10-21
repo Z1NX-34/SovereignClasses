@@ -241,6 +241,18 @@ public final class Server {
         reapplyAll(sp);
     }
 
+    public static void saveWeapons(ServerPlayer sp, String json) {
+        if (!sp.hasPermissions(2)) return;
+        try {
+            Registry.writeWeapons(Registry.weaponsFromWire(json));
+        } catch (Exception e) {
+            sp.sendSystemMessage(Component.literal("[Sovereign Classes] save failed: " + e));
+            return;
+        }
+        Registry.loadDisk();
+        reapplyAll(sp);
+    }
+
     private static void reapplyAll(ServerPlayer from) {
         if (from.getServer() == null) return;
         for (ServerPlayer p : from.getServer().getPlayerList().getPlayers()) applyAll(p, false);

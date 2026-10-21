@@ -43,6 +43,22 @@ public final class Def {
         public int seconds;
     }
 
+    /** Damage change for one weapon type, in percent (-60 = 60 % less, +20 = 20 % more). */
+    public static final class WeaponRow {
+        public String type = "";
+        public double percent;
+    }
+
+    /**
+     * Extra damage rule. when = dealt | taken. filter = all, melee, projectile, explosion, aoe, magic, fire, fall,
+     * spell:<school>, type:<damage type id>, vs:<undead|boss|player|group id>.
+     */
+    public static final class Rule {
+        public String when = "dealt";
+        public String filter = "all";
+        public double percent;
+    }
+
     public Kind kind;
     public String id = "";
     public String name = "";
@@ -57,6 +73,10 @@ public final class Def {
     public List<Ability> abilities = new ArrayList<>();
     public List<Effect> effects = new ArrayList<>();
     public List<String> allowedClasses = new ArrayList<>();
+    /** Percent applied to weapon types that have no row of their own (0 = full damage). */
+    public double weaponOther;
+    public List<WeaponRow> weapons = new ArrayList<>();
+    public List<Rule> rules = new ArrayList<>();
 
     public Def(Kind kind, String id) { this.kind = kind; this.id = id; }
 
@@ -126,6 +146,26 @@ public final class Def {
             try { e.seconds = Math.max(0, j.get("seconds").getAsInt()); } catch (Exception ignored) {}
             if (!e.effect.isBlank()) d.effects.add(e);
         }
+        try { d.weaponOther = o.has("weapon_other") ? o.get("weapon_other").getAsDouble() : 0; } catch (Exception ignored) {}
+        JsonElement wp = o.get("weapons");
+        if (wp != null && wp.isJsonArray()) for (JsonElement x : wp.getAsJsonArray()) {
+            if (!x.isJsonObject()) continue;
+            JsonObject j = x.getAsJsonObject();
+            WeaponRow r = new WeaponRow();
+            r.type = Def.cleanId(str(j, "type", ""));
+            try { r.percent = j.get("percent").getAsDouble(); } catch (Exception ignored) {}
+            if (!r.type.isEmpty()) d.weapons.add(r);
+        }
+        JsonElement ru = o.get("rules");
+        if (ru != null && ru.isJsonArray()) for (JsonElement x : ru.getAsJsonArray()) {
+            if (!x.isJsonObject()) continue;
+            JsonObject j = x.getAsJsonObject();
+            Rule r = new Rule();
+            r.when = "taken".equals(str(j, "when", "dealt")) ? "taken" : "dealt";
+            r.filter = str(j, "filter", "all").trim();
+            try { r.percent = j.get("percent").getAsDouble(); } catch (Exception ignored) {}
+            if (!r.filter.isEmpty()) d.rules.add(r);
+        }
         return d;
     }
 
@@ -188,6 +228,24 @@ public final class Def {
         JsonArray cm = new JsonArray();
         for (String s : commands) cm.add(s);
         o.add("commands", cm);
+        o.addProperty("weapon_other", weaponOther);
+        JsonArray wp = new JsonArray();
+        for (WeaponRow r : weapons) {
+            JsonObject j = new JsonObject();
+            j.addProperty("type", r.type);
+            j.addProperty("percent", r.percent);
+            wp.add(j);
+        }
+        o.add("weapons", wp);
+        JsonArray ru = new JsonArray();
+        for (Rule r : rules) {
+            JsonObject j = new JsonObject();
+            j.addProperty("when", r.when);
+            j.addProperty("filter", r.filter);
+            j.addProperty("percent", r.percent);
+            ru.add(j);
+        }
+        o.add("rules", ru);
         return o;
     }
 

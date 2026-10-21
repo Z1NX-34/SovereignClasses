@@ -27,6 +27,7 @@ public final class Registry {
     public static volatile Map<String, Def> classes = new LinkedHashMap<>();
     public static volatile Map<String, Def> races = new LinkedHashMap<>();
     public static volatile Settings settings = new Settings();
+    public static volatile Weapons weapons = Weapons.defaults();
     public static volatile int version = 0;
 
     private static final Gson PRETTY = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
@@ -44,6 +45,11 @@ public final class Registry {
     }
 
     public static void install(Settings s, Collection<Def> cl, Collection<Def> ra) {
+        install(s, weapons, cl, ra);
+    }
+
+    public static void install(Settings s, Weapons w, Collection<Def> cl, Collection<Def> ra) {
+        weapons = w;
         classes = sorted(cl);
         races = sorted(ra);
         settings = s;
@@ -85,7 +91,24 @@ public final class Registry {
         } catch (Exception e) {
             System.err.println("[sovereignclasses] settings: " + e);
         }
-        install(s, readFolder(Def.Kind.CLASS), readFolder(Def.Kind.RACE));
+        Weapons w = Weapons.defaults();
+        Path wp = dir().resolve("weapons.json");
+        try {
+            if (Files.exists(wp)) w = Weapons.fromJson(JsonParser.parseString(Files.readString(wp, StandardCharsets.UTF_8)).getAsJsonObject());
+            else Files.writeString(wp, PRETTY.toJson(w.toJson()), StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            System.err.println("[sovereignclasses] weapons: " + e);
+        }
+        install(s, w, readFolder(Def.Kind.CLASS), readFolder(Def.Kind.RACE));
+    }
+
+    public static synchronized void writeWeapons(Weapons w) throws IOException {
+        Files.createDirectories(dir());
+        Files.writeString(dir().resolve("weapons.json"), PRETTY.toJson(w.toJson()), StandardCharsets.UTF_8);
+    }
+
+    public static Weapons weaponsFromWire(String json) {
+        return Weapons.fromJson(JsonParser.parseString(json).getAsJsonObject());
     }
 
     public static synchronized void writeDef(Def d) throws IOException {

@@ -1,0 +1,13 @@
+{
+  "name": "Force Vanguard",
+  "description": "A brawler who fights with knuckles and gauntlets.",
+  "order": 4,
+  "tags": ["melee"],
+  "icon": "minecraft:iron_chestplate",
+  "attributes": [{"attribute": "minecraft:generic.knockback_resistance", "amount": 0.25, "operation": "addition"},
+                 {"attribute": "minecraft:generic.attack_speed", "amount": 0.10, "operation": "multiply_base"}],
+  "kit": [], "abilities": [], "effects": [], "commands": [],
+  "weapon_other": -50,
+  "weapons": [{"type": "fist", "percent": 0}, {"type": "unarmed", "percent": 0}],
+  "rules": [{"when": "taken", "filter": "magic", "percent": 20}, {"when": "taken", "filter": "projectile", "percent": 15}]
+}

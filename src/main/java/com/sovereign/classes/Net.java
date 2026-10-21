@@ -34,6 +34,7 @@ public final class Net {
         CH.registerMessage(id++, Choose.class, Choose::enc, Choose::dec, Choose::handle);
         CH.registerMessage(id++, SaveDef.class, SaveDef::enc, SaveDef::dec, SaveDef::handle);
         CH.registerMessage(id++, SaveSettings.class, SaveSettings::enc, SaveSettings::dec, SaveSettings::handle);
+        CH.registerMessage(id++, SaveWeapons.class, SaveWeapons::enc, SaveWeapons::dec, SaveWeapons::handle);
     }
 
     // ---------- helpers ----------
@@ -52,6 +53,7 @@ public final class Net {
     private static Sync buildSync(ServerPlayer sp) {
         Sync s = new Sync();
         s.settings = Registry.settings.toJson().toString();
+        s.weapons = Registry.weapons.toJson().toString();
         for (Def d : Registry.classes.values()) s.classes.add(Registry.toWire(d));
         for (Def d : Registry.races.values()) s.races.add(Registry.toWire(d));
         s.race = PlayerState.race(sp);
@@ -74,12 +76,13 @@ public final class Net {
 
     // ---------- server -> client ----------
     public static final class Sync {
-        String settings = "{}";
+        String settings = "{}", weapons = "{}";
         List<String> classes = new ArrayList<>(), races = new ArrayList<>();
         String race = "", cls = "";
 
         static void enc(Sync m, FriendlyByteBuf b) {
             b.writeUtf(m.settings, MAX);
+            b.writeUtf(m.weapons, MAX);
             b.writeVarInt(m.classes.size());
             for (String s : m.classes) b.writeUtf(s, MAX);
             b.writeVarInt(m.races.size());
@@ -91,6 +94,7 @@ public final class Net {
         static Sync dec(FriendlyByteBuf b) {
             Sync m = new Sync();
             m.settings = b.readUtf(MAX);
+            m.weapons = b.readUtf(MAX);
             int n = b.readVarInt();
             for (int i = 0; i < n; i++) m.classes.add(b.readUtf(MAX));
             n = b.readVarInt();
@@ -101,7 +105,7 @@ public final class Net {
         }
 
         static void handle(Sync m, Supplier<NetworkEvent.Context> c) {
-            client(c, () -> com.sovereign.classes.client.ClientHooks.sync(m.settings, m.classes, m.races, m.race, m.cls));
+            client(c, () -> com.sovereign.classes.client.ClientHooks.sync(m.settings, m.weapons, m.classes, m.races, m.race, m.cls));
         }
     }
 
@@ -149,6 +153,16 @@ public final class Net {
         static SaveSettings dec(FriendlyByteBuf b) { return new SaveSettings(b.readUtf(MAX)); }
         static void handle(SaveSettings m, Supplier<NetworkEvent.Context> c) {
             server(c, sp -> Server.saveSettings(sp, m.json));
+        }
+    }
+
+    public static final class SaveWeapons {
+        final String json;
+        public SaveWeapons(String json) { this.json = json; }
+        static void enc(SaveWeapons m, FriendlyByteBuf b) { b.writeUtf(m.json, MAX); }
+        static SaveWeapons dec(FriendlyByteBuf b) { return new SaveWeapons(b.readUtf(MAX)); }
+        static void handle(SaveWeapons m, Supplier<NetworkEvent.Context> c) {
+            server(c, sp -> Server.saveWeapons(sp, m.json));
         }
     }
 

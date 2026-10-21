@@ -27,10 +27,11 @@ import net.minecraftforge.registries.ForgeRegistries;
  * Every field is bound to the draft as you type, so switching tabs or pickers never loses text.
  */
 public class EditorScreen extends Screen {
-    private enum Tab { CLASSES, RACES, THEME }
+    private enum Tab { CLASSES, RACES, WEAPONS, THEME }
 
-    private static final String[] SEC_C = {"General", "Attributes", "Kit", "Abilities", "Effects", "Commands"};
-    private static final String[] SEC_R = {"General", "Attributes", "Kit", "Abilities", "Effects", "Commands", "Classes"};
+    private static final String[] SEC_C = {"General", "Attributes", "Kit", "Abilities", "Effects", "Weapons", "Rules", "Commands"};
+    private static final String[] SEC_R = {"General", "Attributes", "Kit", "Abilities", "Effects", "Weapons", "Rules", "Commands", "Classes"};
+    private static final String[] SEC_W = {"Weapon types", "Entity groups", "Class locks"};
     private static final String[] SEC_THEME = {"Colours", "Texts & options"};
     private static final String[][] COLOURS = {
             {"accent", "Accent"}, {"accentDark", "Accent dark"}, {"heading", "Headings"}, {"text", "Text"}, {"dim", "Dim text"},
@@ -47,6 +48,8 @@ public class EditorScreen extends Screen {
             case "Kit" -> "Items given when picked. Armour is equipped for you. NBT is optional (enchantments etc.).";
             case "Abilities" -> "Text under Special abilities. Scripted abilities come later.";
             case "Effects" -> "Potion effects. Level starts at 1. Seconds 0 = permanent while this is active.";
+            case "Weapons" -> "Damage change per weapon type, in %. 0 = full damage, -60 = 60% less, +20 = 20% more. 'Other weapons' covers every type not listed.";
+            case "Rules" -> "Extra damage rules. Dealt = damage this player does, Taken = damage they receive. Percents of the same kind add up.";
             case "Commands" -> "Advanced: one command per line, no leading slash, @s = the player. Runs once when picked.";
             default -> "Click to allow or block classes for this race. None ticked = every class is allowed.";
         };
@@ -58,8 +61,15 @@ public class EditorScreen extends Screen {
     private static final class AbRow { String name = "", desc = "", type = ""; JsonObject params = new JsonObject(); }
     private static final class EffRow { String effect; String level = "1"; String seconds = "0"; EffRow(String e) { effect = e; } }
 
+    private static final class WpRow { String type; String percent = "0"; WpRow(String t) { type = t; } }
+    private static final class RuRow { String when = "dealt", filter; String percent = "10"; RuRow(String f) { filter = f; } }
+    private static final class WtRow { String id = "", name = "", match = ""; }
+    private static final class LkRow { String match = "", classes = ""; }
+
     private static final class Draft {
-        String id = "", name = "", a = "", b = "", order = "0", desc = "", commands = "";
+        String id = "", name = "", a = "", b = "", order = "0", desc = "", commands = "", other = "0";
+        List<WpRow> wp = new ArrayList<>();
+        List<RuRow> ru = new ArrayList<>();
         List<AttrRow> attrs = new ArrayList<>();
         List<KitRow> kit = new ArrayList<>();
         List<AbRow> abilities = new ArrayList<>();
@@ -95,6 +105,7 @@ public class EditorScreen extends Screen {
 
     private Def.Kind kind() { return tab == Tab.RACES ? Def.Kind.RACE : Def.Kind.CLASS; }
     private String[] secs() { return tab == Tab.RACES ? SEC_R : SEC_C; }
+    private boolean defTab() { return tab == Tab.CLASSES || tab == Tab.RACES; }
     private String secName() { return secs()[Math.min(section, secs().length - 1)]; }
 
     // ---------- draft <-> def ----------
@@ -112,6 +123,9 @@ public class EditorScreen extends Screen {
         for (Def.Ability a : d.abilities) { AbRow r = new AbRow(); r.name = a.name; r.desc = a.description; r.type = a.type; r.params = a.params; x.abilities.add(r); }
         for (Def.Effect e : d.effects) { EffRow r = new EffRow(e.effect); r.level = Integer.toString(e.amplifier + 1); r.seconds = Integer.toString(e.seconds); x.effects.add(r); }
         x.commands = String.join("\n", d.commands);
+        x.other = Text.fmt(d.weaponOther);
+        for (Def.WeaponRow w : d.weapons) { WpRow r = new WpRow(w.type); r.percent = Text.fmt(w.percent); x.wp.add(r); }
+        for (Def.Rule u : d.rules) { RuRow r = new RuRow(u.filter); r.when = u.when; r.percent = Text.fmt(u.percent); x.ru.add(r); }
         x.allowed.addAll(d.allowedClasses);
         return x;
     }
@@ -156,6 +170,9 @@ public class EditorScreen extends Screen {
             d.effects.add(e);
         }
         d.commands = Text.parseLines(x.commands);
+        d.weaponOther = num(x.other, "Other weapons");
+        for (WpRow r : x.wp) { Def.WeaponRow w = new Def.WeaponRow(); w.type = r.type; w.percent = num(r.percent, r.type); d.weapons.add(w); }
+        for (RuRow r : x.ru) { Def.Rule u = new Def.Rule(); u.when = r.when; u.filter = r.filter; u.percent = num(r.percent, PickerScreen.filterLabel(r.filter)); d.rules.add(u); }
         if (k == Def.Kind.RACE) for (String c : Registry.classes.keySet()) if (x.allowed.contains(c)) d.allowedClasses.add(c);
         if (k == Def.Kind.RACE) for (String c : x.allowed) if (!d.allowedClasses.contains(c) && Registry.classes.containsKey(c)) d.allowedClasses.add(c);
         return d;
@@ -217,8 +234,8 @@ public class EditorScreen extends Screen {
         fx = pad + listW + 8;
         fw = width - fx - pad;
 
-        String[] names = {"Classes", "Races", "Theme"};
-        for (int i = 0; i < 3; i++) {
+        String[] names = {"Classes", "Races", "Weapons", "Theme"};
+        for (int i = 0; i < 4; i++) {
             final int ti = i;
             addRenderableWidget(new SkinButton(pad + i * 84, pad + 14, 80, 18, Component.literal(names[i]), b -> {
                 tab = Tab.values()[ti]; section = 0; rowScroll = 0; draft = null; selectedId = ""; isNew = false; listScroll = 0; status = "";
@@ -232,6 +249,11 @@ public class EditorScreen extends Screen {
             addRenderableWidget(new SkinButton(width - pad - 2 * bw - 6, by, bw, 20, Component.literal("Save"), b -> saveTheme()));
             addRenderableWidget(new SkinButton(width - pad - 3 * bw - 12, by, bw, 20, Component.literal("Preview"), b -> preview()));
             initTheme();
+            return;
+        }
+        if (tab == Tab.WEAPONS) {
+            addRenderableWidget(new SkinButton(width - pad - 2 * bw - 6, by, bw, 20, Component.literal("Save"), b -> saveWeapons()));
+            initWeapons();
             return;
         }
         addRenderableWidget(new SkinButton(width - pad - 2 * bw - 6, by, bw, 20, Component.literal("Save"), b -> save()));
@@ -291,6 +313,8 @@ public class EditorScreen extends Screen {
             case "Kit" -> kitRows(f, dr, ay0, ay1);
             case "Abilities" -> abilityRows(f, dr, ay0, ay1);
             case "Effects" -> effectRows(f, dr, ay0, ay1);
+            case "Weapons" -> weaponRows(f, dr, ay0, ay1);
+            case "Rules" -> ruleRows(f, dr, ay0, ay1);
             default -> classRows(dr, ay0, ay1);
         }
     }
@@ -400,6 +424,133 @@ public class EditorScreen extends Screen {
         }
     }
 
+    private void weaponRows(Font f, Draft dr, int ay0, int ay1) {
+        int y0 = rowsHead("+ Add weapon type", () -> pick("Add weapon type", List.of(PickerScreen.weaponTypes()), id -> {
+            if (dr.wp.stream().noneMatch(r -> r.type.equals(id))) dr.wp.add(new WpRow(id));
+            rowScroll = Integer.MAX_VALUE;
+        }), ay0, ay1, dr.wp.size());
+        int xr = fx + fw - 12, pctW = 54, pctX = xr - 22 - pctW;
+        labels.add(new Lbl(pctX - 112, ay0 + 2, "Other weapons %", Skin.s().cDim, null));
+        box(pctX, ay0 - 2, pctW, dr.other, 8, v -> dr.other = v);
+        for (int i = 0; i < rowsVis && i + rowScroll < dr.wp.size(); i++) {
+            WpRow r = dr.wp.get(i + rowScroll);
+            int y = y0 + i * ROW;
+            com.sovereign.classes.data.Weapons.Type t = Registry.weapons.types.stream().filter(x -> x.id.equals(r.type)).findFirst().orElse(null);
+            labels.add(new Lbl(fx + 4, y + 5, f.plainSubstrByWidth(t == null ? r.type + " (unknown)" : t.label(), pctX - fx - 12), Skin.s().cText, null));
+            box(pctX, y, pctW, r.percent, 8, v -> r.percent = v);
+            final int idx = i + rowScroll;
+            removeBtn(xr - 18, y, () -> dr.wp.remove(idx));
+        }
+    }
+
+    private void ruleRows(Font f, Draft dr, int ay0, int ay1) {
+        int y0 = rowsHead("+ Add rule", () -> pick("Add rule - what kind of damage?", List.of(PickerScreen.filters(), PickerScreen.damageTypes()), id -> {
+            dr.ru.add(new RuRow(id));
+            rowScroll = Integer.MAX_VALUE;
+        }), ay0, ay1, dr.ru.size());
+        int xr = fx + fw - 12, pctW = 54, pctX = xr - 22 - pctW, whenW = 56;
+        int fX = fx + whenW + 4;
+        labels.add(new Lbl(pctX, ay0 + 2, "Change %", Skin.s().cDim, null));
+        for (int i = 0; i < rowsVis && i + rowScroll < dr.ru.size(); i++) {
+            RuRow r = dr.ru.get(i + rowScroll);
+            int y = y0 + i * ROW;
+            addRenderableWidget(new SkinButton(fx, y, whenW, 18, Component.literal("dealt".equals(r.when) ? "Dealt" : "Taken"), b -> {
+                r.when = "dealt".equals(r.when) ? "taken" : "dealt";
+                rebuildWidgets();
+            }));
+            addRenderableWidget(new SkinButton(fX, y, pctX - fX - 4, 18, Component.literal(PickerScreen.filterLabel(r.filter)), b ->
+                    pick("Change damage kind", List.of(PickerScreen.filters(), PickerScreen.damageTypes()), id -> r.filter = id)));
+            box(pctX, y, pctW, r.percent, 8, v -> r.percent = v);
+            final int idx = i + rowScroll;
+            removeBtn(xr - 18, y, () -> dr.ru.remove(idx));
+        }
+    }
+
+    // ---------- weapons tab ----------
+    private List<WtRow> wTypes, wGroups;
+    private List<LkRow> wLocks;
+    private int wsec;
+
+    private void loadWeapons() {
+        if (wTypes != null) return;
+        wTypes = new ArrayList<>(); wGroups = new ArrayList<>(); wLocks = new ArrayList<>();
+        for (var t : Registry.weapons.types) { WtRow r = new WtRow(); r.id = t.id; r.name = t.name; r.match = Text.listToText(t.match, ", "); wTypes.add(r); }
+        for (var t : Registry.weapons.groups) { WtRow r = new WtRow(); r.id = t.id; r.name = t.name; r.match = Text.listToText(t.match, ", "); wGroups.add(r); }
+        for (var l : Registry.weapons.locks) { LkRow r = new LkRow(); r.match = Text.listToText(l.match, ", "); r.classes = Text.listToText(l.classes, ", "); wLocks.add(r); }
+    }
+
+    private static String append(String list, String id) {
+        return list.isBlank() ? id : list.trim() + ", " + id;
+    }
+
+    private void initWeapons() {
+        loadWeapons();
+        fx = pad; fw = width - 2 * pad;
+        for (int i = 0; i < SEC_W.length; i++) {
+            final int si = i;
+            addRenderableWidget(new SkinButton(pad + i * 124, bodyTop + 4, 120, 16, Component.literal(SEC_W[i]), b -> { wsec = si; rowScroll = 0; rebuildWidgets(); }).highlight(wsec == i));
+        }
+        int ay0 = bodyTop + 52, ay1 = bodyBottom - 6;
+        int xr = fx + fw - 12;
+        if (wsec == 2) {
+            int y0 = rowsHead("+ Add lock", () -> { wLocks.add(new LkRow()); rowScroll = Integer.MAX_VALUE; rebuildWidgets(); }, ay0, ay1, wLocks.size());
+            int clsW = Math.max(100, fw / 4), clsX = xr - 22 - clsW, matchX = fx + 44, matchW = clsX - 44 - 4 - matchX;
+            labels.add(new Lbl(matchX, ay0 + 2, "Items (id, #tag or *word*)", Skin.s().cDim, null));
+            labels.add(new Lbl(clsX, ay0 + 2, "Only these classes (ids)", Skin.s().cDim, null));
+            for (int i = 0; i < rowsVis && i + rowScroll < wLocks.size(); i++) {
+                LkRow r = wLocks.get(i + rowScroll);
+                int y = y0 + i * ROW;
+                addRenderableWidget(new SkinButton(fx, y, 40, 18, Component.literal("Item"), b ->
+                        pick("Lock which item?", List.of(PickerScreen.items()), id -> r.match = append(r.match, id))));
+                box(matchX, y, matchW, r.match, 600, v -> r.match = v);
+                addRenderableWidget(new SkinButton(clsX - 44, y, 40, 18, Component.literal("Class"), b ->
+                        pick("Allow which class?", List.of(PickerScreen.classesSource()), id -> r.classes = append(r.classes, id))));
+                box(clsX, y, clsW, r.classes, 300, v -> r.classes = v);
+                final int idx = i + rowScroll;
+                removeBtn(xr - 18, y, () -> wLocks.remove(idx));
+            }
+            return;
+        }
+        List<WtRow> rows = wsec == 0 ? wTypes : wGroups;
+        int y0 = rowsHead(wsec == 0 ? "+ Add weapon type" : "+ Add group", () -> { rows.add(new WtRow()); rowScroll = Integer.MAX_VALUE; rebuildWidgets(); }, ay0, ay1, rows.size());
+        int idW = 80, nameW = 120, idX = fx + 44, nameX = idX + idW + 4, matchX = nameX + nameW + 4, matchW = xr - 22 - matchX;
+        labels.add(new Lbl(idX, ay0 + 2, "ID", Skin.s().cDim, null));
+        labels.add(new Lbl(nameX, ay0 + 2, "Name", Skin.s().cDim, null));
+        labels.add(new Lbl(matchX, ay0 + 2, wsec == 0 ? "Matches (checked top to bottom, first wins)" : "Matches (entity ids, #tags, *words*)", Skin.s().cDim, null));
+        for (int i = 0; i < rowsVis && i + rowScroll < rows.size(); i++) {
+            WtRow r = rows.get(i + rowScroll);
+            int y = y0 + i * ROW;
+            addRenderableWidget(new SkinButton(fx, y, 40, 18, Component.literal(wsec == 0 ? "Item" : "Mob"), b ->
+                    pick(wsec == 0 ? "Add an item" : "Add a mob", List.of(wsec == 0 ? PickerScreen.items() : PickerScreen.entities()), id -> r.match = append(r.match, id))));
+            box(idX, y, idW, r.id, 30, v -> r.id = v);
+            box(nameX, y, nameW, r.name, 40, v -> r.name = v);
+            box(matchX, y, matchW, r.match, 800, v -> r.match = v);
+            final int idx = i + rowScroll;
+            removeBtn(xr - 18, y, () -> rows.remove(idx));
+        }
+    }
+
+    private void saveWeapons() {
+        com.sovereign.classes.data.Weapons w = new com.sovereign.classes.data.Weapons();
+        for (int g = 0; g < 2; g++) {
+            for (WtRow r : g == 0 ? wTypes : wGroups) {
+                var t = new com.sovereign.classes.data.Weapons.Type();
+                t.id = Def.cleanId(r.id);
+                if (t.id.isEmpty()) continue;
+                t.name = r.name.trim(); t.match = Text.parseList(r.match, ",");
+                (g == 0 ? w.types : w.groups).add(t);
+            }
+        }
+        for (LkRow r : wLocks) {
+            var l = new com.sovereign.classes.data.Weapons.Lock();
+            l.match = Text.parseList(r.match, ","); l.classes = Text.parseList(r.classes, ",");
+            if (!l.match.isEmpty()) w.locks.add(l);
+        }
+        Net.CH.sendToServer(new Net.SaveWeapons(w.toJson().toString()));
+        wTypes = null;
+        status = "Saved"; statusColor = Skin.s().cPos;
+    }
+
     private void classRows(Draft dr, int ay0, int ay1) {
         List<String> ids = new ArrayList<>(Registry.classes.keySet());
         int cols = 2, gap = 6, cw = (fw - 12 - gap) / cols;
@@ -503,7 +654,7 @@ public class EditorScreen extends Screen {
         super.tick();
         if (seenVersion != Registry.version) {
             seenVersion = Registry.version;
-            if (tab != Tab.THEME) {
+            if (defTab()) {
                 if (!pendingSelect.isEmpty()) {
                     Def d = Registry.of(kind()).get(pendingSelect);
                     if (d != null) { draft = toDraft(d); selectedId = d.id; isNew = false; status = "Saved"; statusColor = Skin.s().cPos; }
@@ -531,6 +682,14 @@ public class EditorScreen extends Screen {
                 g.drawString(f, fields[i][1], pad + (i % cols) * (cw + gap), y0 + (i / cols) * 30 - 10, st.cDim, false);
             if (section == 0)
                 g.drawString(f, "Colours are hex like #E8B028. Hue shift recolours the whole texture set; set the accent colours to match.", pad, bodyBottom - 12, st.cDim, false);
+        } else if (tab == Tab.WEAPONS) {
+            Skin.panel(g, pad - 6, bodyTop, width - 2 * pad + 12, bodyBottom - bodyTop);
+            String[] hints = {
+                    "Which items count as which weapon type. Classes then get a damage % per type. Use an item id, #tag, or *word* (matches any id containing it).",
+                    "Groups of mobs for rules like 'Against demons'. Undead, boss and player already exist built in.",
+                    "Items only the listed classes may use (attack, use, mine). Others get a message and nothing happens."};
+            var lines = f.split(Component.literal(hints[wsec]), width - 2 * pad - 8);
+            for (int i = 0; i < Math.min(2, lines.size()); i++) g.drawString(f, lines.get(i), pad, bodyTop + 26 + i * 9, st.cDim, false);
         } else {
             Skin.panel(g, fx - 6, bodyTop, fw + 12, bodyBottom - bodyTop);
             if (draft == null) {
@@ -556,7 +715,7 @@ public class EditorScreen extends Screen {
             if (l.icon() != null) Skin.drawIcon(g, l.icon(), l.x(), l.y());
             else g.drawString(f, l.text(), l.x(), l.y(), l.color(), false);
         }
-        if (rowsTotal > 0 && tab != Tab.THEME && draft != null)
+        if (rowsTotal > 0 && ((defTab() && draft != null) || tab == Tab.WEAPONS))
             Skin.scrollBar(g, fx + fw - 6, rowsY0, rowsVis * ROW, rowsVis, rowsTotal, rowScroll);
         if (!status.isEmpty()) g.drawString(f, f.plainSubstrByWidth(status, width - 2 * pad - 280), pad, height - pad - 14, statusColor, false);
         super.render(g, mx, my, pt);
@@ -565,12 +724,12 @@ public class EditorScreen extends Screen {
     @Override
     public boolean mouseScrolled(double mx, double my, double delta) {
         int d = -(int) Math.signum(delta);
-        if (tab != Tab.THEME && mx < fx - 8 && my > bodyTop + 22) {
+        if (defTab() && mx < fx - 8 && my > bodyTop + 22) {
             listScroll = Math.max(0, listScroll + d);
             rebuildWidgets();
             return true;
         }
-        if (tab != Tab.THEME && draft != null && rowsTotal > 0 && mx >= fx && my >= rowsY0) {
+        if (((defTab() && draft != null) || tab == Tab.WEAPONS) && rowsTotal > 0 && mx >= fx && my >= rowsY0) {
             rowScroll = Math.max(0, Math.min(rowScroll + d, Math.max(0, rowsTotal - rowsVis)));
             rebuildWidgets();
             return true;
