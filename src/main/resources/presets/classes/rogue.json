@@ -1,0 +1,60 @@
+{
+  "name": "Rogue",
+  "description": "A swift shadow who strikes with daggers. Fast and deadly, but fragile.",
+  "order": 2,
+  "tags": [
+    "melee",
+    "stealth"
+  ],
+  "icon": "minecraft:iron_sword",
+  "attributes": [
+    {
+      "attribute": "minecraft:generic.movement_speed",
+      "amount": 0.25,
+      "operation": "multiply_base"
+    },
+    {
+      "attribute": "minecraft:generic.attack_speed",
+      "amount": 0.1,
+      "operation": "multiply_base"
+    },
+    {
+      "attribute": "minecraft:generic.max_health",
+      "amount": -0.25,
+      "operation": "multiply_base"
+    },
+    {
+      "attribute": "minecraft:generic.armor",
+      "amount": -0.2,
+      "operation": "multiply_base"
+    }
+  ],
+  "kit": [],
+  "abilities": [
+    {
+      "name": "Shadowstep",
+      "description": "Crouching grants invisibility for 15 seconds and no longer slows you down."
+    }
+  ],
+  "effects": [],
+  "commands": [],
+  "weapon_other": -60,
+  "weapons": [
+    {
+      "type": "dagger",
+      "percent": 0
+    }
+  ],
+  "rules": [
+    {
+      "when": "taken",
+      "filter": "aoe",
+      "percent": 30
+    },
+    {
+      "when": "taken",
+      "filter": "projectile",
+      "percent": 30
+    }
+  ]
+}

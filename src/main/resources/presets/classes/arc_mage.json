@@ -1,0 +1,39 @@
+{
+  "name": "Arc Mage",
+  "description": "A scholar of raw arcane power, strong in every school of magic.",
+  "order": 7,
+  "tags": [
+    "magic"
+  ],
+  "icon": "minecraft:enchanted_book",
+  "attributes": [
+    {
+      "attribute": "minecraft:generic.max_health",
+      "amount": -0.25,
+      "operation": "multiply_base"
+    }
+  ],
+  "kit": [],
+  "abilities": [
+    {
+      "name": "Siphon",
+      "description": "Spell damage heals 15% of the damage dealt."
+    }
+  ],
+  "effects": [],
+  "commands": [],
+  "weapon_other": -40,
+  "weapons": [
+    {
+      "type": "staff",
+      "percent": 0
+    }
+  ],
+  "rules": [
+    {
+      "when": "dealt",
+      "filter": "magic",
+      "percent": 80
+    }
+  ]
+}

@@ -1,0 +1,48 @@
+{
+  "name": "Reaper",
+  "description": "Death's own harvester. Reaps the living with scythes and spears, but fears the dead.",
+  "order": 11,
+  "tags": [
+    "melee"
+  ],
+  "icon": "minecraft:netherite_hoe",
+  "attributes": [
+    {
+      "attribute": "minecraft:generic.max_health",
+      "amount": -0.15,
+      "operation": "multiply_base"
+    }
+  ],
+  "kit": [],
+  "abilities": [],
+  "effects": [],
+  "commands": [],
+  "weapon_other": -50,
+  "weapons": [
+    {
+      "type": "scythe",
+      "percent": 200
+    },
+    {
+      "type": "spear",
+      "percent": 200
+    }
+  ],
+  "rules": [
+    {
+      "when": "dealt",
+      "filter": "all",
+      "percent": 20
+    },
+    {
+      "when": "dealt",
+      "filter": "vs:undead",
+      "percent": -40
+    },
+    {
+      "when": "taken",
+      "filter": "vs:undead",
+      "percent": 25
+    }
+  ]
+}

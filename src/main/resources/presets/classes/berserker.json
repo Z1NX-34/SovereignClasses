@@ -1,0 +1,37 @@
+{
+  "name": "Berserker",
+  "description": "A reckless axe fighter who lives on the edge of death.",
+  "order": 12,
+  "tags": [
+    "melee"
+  ],
+  "icon": "minecraft:iron_axe",
+  "attributes": [],
+  "kit": [],
+  "abilities": [
+    {
+      "name": "Bloodlust",
+      "description": "Grows stronger as health drops, and kills restore health."
+    }
+  ],
+  "effects": [],
+  "commands": [],
+  "weapon_other": -60,
+  "weapons": [
+    {
+      "type": "axe",
+      "percent": 0
+    },
+    {
+      "type": "greataxe",
+      "percent": 0
+    }
+  ],
+  "rules": [
+    {
+      "when": "taken",
+      "filter": "all",
+      "percent": 20
+    }
+  ]
+}

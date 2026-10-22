@@ -1,0 +1,64 @@
+{
+  "name": "Slayer",
+  "description": "A katana duelist hunting the undead, demons and bosses.",
+  "order": 5,
+  "tags": [
+    "melee"
+  ],
+  "icon": "minecraft:netherite_sword",
+  "attributes": [
+    {
+      "attribute": "minecraft:generic.movement_speed",
+      "amount": 0.05,
+      "operation": "multiply_base"
+    },
+    {
+      "attribute": "minecraft:generic.max_health",
+      "amount": -0.15,
+      "operation": "multiply_base"
+    }
+  ],
+  "kit": [],
+  "abilities": [
+    {
+      "name": "Monster Hunter",
+      "description": "+75% damage against undead, demons and bosses, -30% against everything else."
+    }
+  ],
+  "effects": [],
+  "commands": [],
+  "weapon_other": -60,
+  "weapons": [
+    {
+      "type": "katana",
+      "percent": 0
+    }
+  ],
+  "rules": [
+    {
+      "when": "dealt",
+      "filter": "all",
+      "percent": -30
+    },
+    {
+      "when": "dealt",
+      "filter": "vs:undead",
+      "percent": 105
+    },
+    {
+      "when": "dealt",
+      "filter": "vs:demon",
+      "percent": 105
+    },
+    {
+      "when": "dealt",
+      "filter": "vs:boss",
+      "percent": 105
+    },
+    {
+      "when": "taken",
+      "filter": "all",
+      "percent": 15
+    }
+  ]
+}

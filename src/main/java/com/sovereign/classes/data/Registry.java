@@ -57,6 +57,32 @@ public final class Registry {
     }
 
     // ---------- disk (server side) ----------
+    /** First run: copy the bundled presets into an empty classes/races folder. */
+    private static void seed(Def.Kind kind) {
+        Path d = dir().resolve(kind.folder);
+        try {
+            Files.createDirectories(d);
+            try (Stream<Path> st = Files.list(d)) {
+                if (st.anyMatch(x -> x.getFileName().toString().endsWith(".json"))) return;
+            }
+            String base = "/presets/" + kind.folder + "/";
+            String idx;
+            try (java.io.InputStream in = Registry.class.getResourceAsStream(base + "index.txt")) {
+                if (in == null) return;
+                idx = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+            }
+            for (String name : idx.split("\\R")) {
+                name = name.trim();
+                if (name.isEmpty()) continue;
+                try (java.io.InputStream in = Registry.class.getResourceAsStream(base + name + ".json")) {
+                    if (in != null) Files.write(d.resolve(name + ".json"), in.readAllBytes());
+                }
+            }
+        } catch (IOException e) {
+            System.err.println("[sovereignclasses] presets: " + e);
+        }
+    }
+
     private static List<Def> readFolder(Def.Kind kind) {
         List<Def> out = new ArrayList<>();
         Path d = dir().resolve(kind.folder);
@@ -99,6 +125,8 @@ public final class Registry {
         } catch (Exception e) {
             System.err.println("[sovereignclasses] weapons: " + e);
         }
+        seed(Def.Kind.CLASS);
+        seed(Def.Kind.RACE);
         install(s, w, readFolder(Def.Kind.CLASS), readFolder(Def.Kind.RACE));
     }
 

@@ -1,0 +1,13 @@
+{
+  "name": "God",
+  "description": "A being beyond mortal law. Only the Cursed God walks this path.",
+  "order": 2,
+  "attributes": [],
+  "kit": [],
+  "abilities": [],
+  "effects": [],
+  "commands": [],
+  "allowed_classes": [
+    "cursed_god"
+  ]
+}

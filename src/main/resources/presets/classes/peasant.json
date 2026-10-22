@@ -1,0 +1,17 @@
+{
+  "name": "Peasant",
+  "description": "Humble and unspecialised. Full potential with every weapon, no strengths and no weaknesses.",
+  "order": 1,
+  "tags": [
+    "balanced"
+  ],
+  "icon": "minecraft:wheat",
+  "attributes": [],
+  "kit": [],
+  "abilities": [],
+  "effects": [],
+  "commands": [],
+  "weapon_other": 0,
+  "weapons": [],
+  "rules": []
+}

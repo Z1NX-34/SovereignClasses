@@ -1,0 +1,24 @@
+{
+  "name": "Human",
+  "description": "Adaptable and resilient. Humans may follow any path except that of the gods.",
+  "order": 1,
+  "attributes": [],
+  "kit": [],
+  "abilities": [],
+  "effects": [],
+  "commands": [],
+  "allowed_classes": [
+    "peasant",
+    "rogue",
+    "forgotten_knight",
+    "force_vanguard",
+    "slayer",
+    "titan",
+    "arc_mage",
+    "divine_mage",
+    "void_mage",
+    "marksman",
+    "reaper",
+    "berserker"
+  ]
+}

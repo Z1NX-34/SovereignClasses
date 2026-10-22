@@ -1,0 +1,49 @@
+{
+  "name": "Void Mage",
+  "description": "A wielder of ender magic. Devastating void spells, vulnerable to holy light.",
+  "order": 9,
+  "tags": [
+    "magic"
+  ],
+  "icon": "minecraft:ender_pearl",
+  "attributes": [
+    {
+      "attribute": "minecraft:generic.max_health",
+      "amount": -0.25,
+      "operation": "multiply_base"
+    }
+  ],
+  "kit": [],
+  "abilities": [
+    {
+      "name": "Hollow",
+      "description": "Spell damage heals 10% of the damage dealt."
+    }
+  ],
+  "effects": [],
+  "commands": [],
+  "weapon_other": -40,
+  "weapons": [
+    {
+      "type": "staff",
+      "percent": 0
+    }
+  ],
+  "rules": [
+    {
+      "when": "dealt",
+      "filter": "spell:ender",
+      "percent": 150
+    },
+    {
+      "when": "dealt",
+      "filter": "spell:holy",
+      "percent": -350
+    },
+    {
+      "when": "taken",
+      "filter": "spell:holy",
+      "percent": 50
+    }
+  ]
+}

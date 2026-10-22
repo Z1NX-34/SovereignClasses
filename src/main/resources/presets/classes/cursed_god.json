@@ -1,0 +1,22 @@
+{
+  "name": "Cursed God",
+  "description": "Chosen of the Seven Curses. Wields any weapon with 20% more effect.",
+  "order": 13,
+  "tags": [
+    "divine"
+  ],
+  "icon": "minecraft:nether_star",
+  "attributes": [],
+  "kit": [],
+  "abilities": [
+    {
+      "name": "Burden of Gods",
+      "description": "Comes bearing the Seven Curses."
+    }
+  ],
+  "effects": [],
+  "commands": [],
+  "weapon_other": 20,
+  "weapons": [],
+  "rules": []
+}

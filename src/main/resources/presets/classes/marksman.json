@@ -1,0 +1,48 @@
+{
+  "name": "Marksman",
+  "description": "A ranged specialist with bows and crossbows.",
+  "order": 10,
+  "tags": [
+    "ranged"
+  ],
+  "icon": "minecraft:bow",
+  "attributes": [
+    {
+      "attribute": "minecraft:generic.movement_speed",
+      "amount": 0.1,
+      "operation": "multiply_base"
+    },
+    {
+      "attribute": "minecraft:generic.max_health",
+      "amount": -0.2,
+      "operation": "multiply_base"
+    }
+  ],
+  "kit": [],
+  "abilities": [],
+  "effects": [],
+  "commands": [],
+  "weapon_other": -20,
+  "weapons": [
+    {
+      "type": "bow",
+      "percent": 0
+    },
+    {
+      "type": "crossbow",
+      "percent": 0
+    }
+  ],
+  "rules": [
+    {
+      "when": "dealt",
+      "filter": "projectile",
+      "percent": 80
+    },
+    {
+      "when": "taken",
+      "filter": "melee",
+      "percent": 20
+    }
+  ]
+}

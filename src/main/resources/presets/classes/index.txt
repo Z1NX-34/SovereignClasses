@@ -1,0 +1,13 @@
+peasant
+rogue
+forgotten_knight
+force_vanguard
+slayer
+titan
+arc_mage
+divine_mage
+void_mage
+marksman
+reaper
+berserker
+cursed_god

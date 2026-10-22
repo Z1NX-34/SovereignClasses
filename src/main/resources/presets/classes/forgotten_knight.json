@@ -1,0 +1,85 @@
+{
+  "name": "Forgotten Knight",
+  "description": "A fallen warrior of lost orders. Masters nearly every melee weapon but cannot wield magic.",
+  "order": 3,
+  "tags": [
+    "melee"
+  ],
+  "icon": "minecraft:iron_chestplate",
+  "attributes": [
+    {
+      "attribute": "minecraft:generic.attack_damage",
+      "amount": 0.15,
+      "operation": "multiply_base"
+    }
+  ],
+  "kit": [],
+  "abilities": [
+    {
+      "name": "Veteran's Edge",
+      "description": "+25% melee crit chance and +50% melee crit damage."
+    }
+  ],
+  "effects": [],
+  "commands": [],
+  "weapon_other": -60,
+  "weapons": [
+    {
+      "type": "sword",
+      "percent": 0
+    },
+    {
+      "type": "katana",
+      "percent": 0
+    },
+    {
+      "type": "greatsword",
+      "percent": 0
+    },
+    {
+      "type": "greataxe",
+      "percent": 0
+    },
+    {
+      "type": "axe",
+      "percent": 0
+    },
+    {
+      "type": "hammer",
+      "percent": 0
+    },
+    {
+      "type": "spear",
+      "percent": 0
+    },
+    {
+      "type": "dagger",
+      "percent": 0
+    },
+    {
+      "type": "scythe",
+      "percent": 0
+    },
+    {
+      "type": "fist",
+      "percent": 0
+    }
+  ],
+  "rules": [
+    {
+      "when": "dealt",
+      "filter": "magic",
+      "percent": -70
+    },
+    {
+      "when": "taken",
+      "filter": "magic",
+      "percent": 150
+    },
+    {
+      "when": "taken",
+      "filter": "aoe",
+      "percent": 150
+    }
+  ]
+}

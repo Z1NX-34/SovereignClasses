@@ -1,0 +1,49 @@
+{
+  "name": "Divine Mage",
+  "description": "A priest of holy light. Devastating holy magic, defenceless against the void.",
+  "order": 8,
+  "tags": [
+    "magic"
+  ],
+  "icon": "minecraft:golden_apple",
+  "attributes": [
+    {
+      "attribute": "minecraft:generic.max_health",
+      "amount": -0.25,
+      "operation": "multiply_base"
+    }
+  ],
+  "kit": [],
+  "abilities": [
+    {
+      "name": "Radiance",
+      "description": "Spell damage heals 10% of the damage dealt."
+    }
+  ],
+  "effects": [],
+  "commands": [],
+  "weapon_other": -40,
+  "weapons": [
+    {
+      "type": "staff",
+      "percent": 0
+    }
+  ],
+  "rules": [
+    {
+      "when": "dealt",
+      "filter": "spell:holy",
+      "percent": 150
+    },
+    {
+      "when": "dealt",
+      "filter": "spell:ender",
+      "percent": -350
+    },
+    {
+      "when": "taken",
+      "filter": "spell:ender",
+      "percent": 50
+    }
+  ]
+}
